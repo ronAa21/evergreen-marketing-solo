@@ -6,6 +6,7 @@
 - **Created Finance branch**
 - **Fixed directory connections** - Updated all hardcoded paths from `/bank-system/` to `/Evergreen/bank-system/` throughout the project
 
+
 ---
 
 ## Directory Structure
