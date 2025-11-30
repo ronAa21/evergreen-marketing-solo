@@ -82,4 +82,4 @@ When adding new features or modules:
 
 ## Contact & Support
 
-SBIT-3C devs
+@jayjayandcattos @Leap0920 @Arimetsu @mrkadriann @ronAa21 @Johsua1
