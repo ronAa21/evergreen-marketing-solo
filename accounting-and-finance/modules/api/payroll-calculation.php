@@ -213,41 +213,61 @@ function calculatePayrollFromAttendance($conn, $employee_external_no, $period_st
     $hourly_rate = 0;
     $base_salary = 0;
     
-    // Get employee base salary directly from employee_refs table
-    $employee_data = null;
+    // Get employee base salary - MATCH ACCOUNTING SYSTEM: prioritize contract salary first, then employee_refs
+    // We need employee_id to join with contract table, so we'll query using the extracted employee_id
+    $base_salary = 0;
     
-    // Try prepared statement first
-    $employee_query = "SELECT base_monthly_salary FROM employee_refs WHERE external_employee_no = ? LIMIT 1";
-    $emp_stmt = $conn->prepare($employee_query);
-    
-    if ($emp_stmt === false) {
-        // If prepare fails (likely column doesn't exist or SQL error), use fallback query
-        $escaped_emp_no = $conn->real_escape_string($employee_external_no);
-        $fallback_query = "SELECT base_monthly_salary FROM employee_refs WHERE external_employee_no = '$escaped_emp_no' LIMIT 1";
-        $fallback_result = $conn->query($fallback_query);
+    if ($employee_id_from_external) {
+        // Query with priority: contract salary first, then employee_refs base_monthly_salary
+        $employee_query = "SELECT 
+                            c.salary as contract_salary,
+                            er.base_monthly_salary
+                          FROM employee e
+                          LEFT JOIN contract c ON e.contract_id = c.contract_id
+                          LEFT JOIN employee_refs er ON er.external_employee_no = CONCAT('EMP', LPAD(e.employee_id, 3, '0'))
+                          WHERE e.employee_id = ?
+                          LIMIT 1";
+        $emp_stmt = $conn->prepare($employee_query);
         
-        if ($fallback_result === false) {
-            // If that also fails, try SELECT * to check if table exists at all
-            $fallback_query2 = "SELECT * FROM employee_refs WHERE external_employee_no = '$escaped_emp_no' LIMIT 1";
-            $fallback_result2 = $conn->query($fallback_query2);
-            $employee_data = $fallback_result2 ? $fallback_result2->fetch_assoc() : null;
-        } else {
-            $employee_data = $fallback_result->fetch_assoc();
+        if ($emp_stmt) {
+            $emp_stmt->bind_param("i", $employee_id_from_external);
+            $emp_stmt->execute();
+            $emp_result = $emp_stmt->get_result();
+            $employee_data = $emp_result->fetch_assoc();
+            $emp_stmt->close();
+            
+            // MATCH ACCOUNTING SYSTEM PRIORITY: contract salary first, then employee_refs base_monthly_salary
+            if ($employee_data) {
+                // First try HRIS contract salary (priority 1)
+                if (!empty($employee_data['contract_salary']) && floatval($employee_data['contract_salary']) > 0) {
+                    $base_salary = floatval($employee_data['contract_salary']);
+                } elseif (isset($employee_data['base_monthly_salary']) && floatval($employee_data['base_monthly_salary']) > 0) {
+                    // Then try employee_refs base_monthly_salary (priority 2)
+                    $base_salary = floatval($employee_data['base_monthly_salary']);
+                }
+            }
         }
-    } else {
-        $emp_stmt->bind_param("s", $employee_external_no);
-        $emp_stmt->execute();
-        $emp_result = $emp_stmt->get_result();
-        $employee_data = $emp_result->fetch_assoc();
-        $emp_stmt->close();
     }
     
-    // Get base salary from employee_refs table (Philippine market rates)
-    if ($employee_data && isset($employee_data['base_monthly_salary'])) {
-        $base_salary = floatval($employee_data['base_monthly_salary']);
+    // Fallback: Try employee_refs directly if we couldn't get employee_id
+    if ($base_salary == 0) {
+        $emp_query_fallback = "SELECT base_monthly_salary FROM employee_refs WHERE external_employee_no = ? LIMIT 1";
+        $emp_stmt_fallback = $conn->prepare($emp_query_fallback);
+        
+        if ($emp_stmt_fallback) {
+            $emp_stmt_fallback->bind_param("s", $employee_external_no);
+            $emp_stmt_fallback->execute();
+            $emp_result_fallback = $emp_stmt_fallback->get_result();
+            $employee_data_fallback = $emp_result_fallback->fetch_assoc();
+            $emp_stmt_fallback->close();
+            
+            if ($employee_data_fallback && isset($employee_data_fallback['base_monthly_salary'])) {
+                $base_salary = floatval($employee_data_fallback['base_monthly_salary']);
+            }
+        }
     }
     
-    // Fallback to base salary components if employee salary not found
+    // Final fallback: base salary components if employee salary not found
     if ($base_salary == 0 && !empty($base_salary_components)) {
         foreach ($base_salary_components as $component) {
             if (isset($component['code']) && $component['code'] === 'BASIC') {

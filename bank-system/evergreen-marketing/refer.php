@@ -1065,7 +1065,7 @@ function applyReferral($conn, $user_id) {
                 </div>
         </div>
 
-                     <a href="#loans">Loans</a>
+                     <a href="/Evergreen/LoanSubsystem/index.php">Loans</a>
                      <a href="./about.php">About Us</a>
         </div>
 
@@ -1080,7 +1080,7 @@ function applyReferral($conn, $user_id) {
                 </div>
 
                 <div id="profileDropdown" class="profile-dropdown" role="menu" aria-labelledby="profileBtn">
-                    <a href="../Basic-operation/operations/public/customer/profile" role="menuitem">Profile</a>
+                    <a href="/Evergreen/bank-system/Basic-operation/operations/public/customer/profile" role="menuitem">Profile</a>
                     <a href="refer.php" role="menuitem">Refer to a friend</a>
                     <a href="./cards/points.php" role="menuitem">Missions</a>
                     <a href="viewing.php" role="menuitem" onclick="showSignOutModal(event)">Sign Out</a>

@@ -1943,7 +1943,10 @@ if ($selected_employee) {
                                     </div>
                                 <div class="tax-summary-item tax-summary-final">
                                     <span class="tax-summary-label">Net Pay after Deductions:</span>
-                                    <span class="tax-summary-value">₱<?php echo number_format($tax_net_pay_after_deductions, 2); ?></span>
+                                    <span class="tax-summary-value">₱<?php 
+                                        $final_net_pay = max(0, $tax_net_pay_after_deductions);
+                                        echo number_format($final_net_pay, 2); 
+                                    ?></span>
                                 </div>
                             </div>
                         </div>
@@ -2378,7 +2381,12 @@ if ($selected_employee) {
                         </div>
                         <div class="overall-summary-row">
                             <span class="label">Net Salary:</span>
-                            <span class="value">₱<?php echo number_format(($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall) - $total_deductions_overall, 2); ?></span>
+                            <span class="value">₱<?php 
+                                $net_salary = ($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall) - $total_deductions_overall;
+                                // Ensure net salary is never negative - set to 0 if negative
+                                $net_salary = max(0, $net_salary);
+                                echo number_format($net_salary, 2); 
+                            ?></span>
                         </div>
                     </div>
 

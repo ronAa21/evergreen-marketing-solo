@@ -304,12 +304,13 @@ function getPayslips() {
 function calculatePayslipsFromAttendance($conn, $external_employee_no, $employee_id, $saved_periods = []) {
     $payslips = [];
     
-    // Get employee's base salary from employee_refs or contract
+    // Get employee's base salary - MATCH ACCOUNTING SYSTEM: prioritize contract salary first, then employee_refs
     $salary_query = "SELECT 
-                        COALESCE(er.base_monthly_salary, c.salary, 0) as base_salary
+                        c.salary as contract_salary,
+                        er.base_monthly_salary
                     FROM employee e
-                    LEFT JOIN employee_refs er ON er.external_employee_no = CONCAT('EMP', LPAD(e.employee_id, 3, '0'))
                     LEFT JOIN contract c ON e.contract_id = c.contract_id
+                    LEFT JOIN employee_refs er ON er.external_employee_no = CONCAT('EMP', LPAD(e.employee_id, 3, '0'))
                     WHERE e.employee_id = ?
                     LIMIT 1";
     
@@ -322,7 +323,18 @@ function calculatePayslipsFromAttendance($conn, $external_employee_no, $employee
     $salary_stmt->execute();
     $salary_result = $salary_stmt->get_result();
     $salary_row = $salary_result->fetch_assoc();
-    $base_salary = $salary_row ? floatval($salary_row['base_salary']) : 0;
+    
+    // MATCH ACCOUNTING SYSTEM PRIORITY: contract salary first, then employee_refs base_monthly_salary
+    $base_salary = 0;
+    if ($salary_row) {
+        // First try HRIS contract salary (priority 1)
+        if (!empty($salary_row['contract_salary']) && floatval($salary_row['contract_salary']) > 0) {
+            $base_salary = floatval($salary_row['contract_salary']);
+        } elseif (isset($salary_row['base_monthly_salary']) && floatval($salary_row['base_monthly_salary']) > 0) {
+            // Then try employee_refs base_monthly_salary (priority 2)
+            $base_salary = floatval($salary_row['base_monthly_salary']);
+        }
+    }
     $salary_stmt->close();
     
     if ($base_salary <= 0) {
