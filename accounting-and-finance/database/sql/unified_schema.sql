@@ -878,6 +878,19 @@ CREATE TABLE loan_payments (
     INDEX idx_payment_date (payment_date)
 );
 
+CREATE TABLE `loan_valid_id` (
+  `id` int(11) NOT NULL,
+  `valid_id_type` varchar(150) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE `loan_application_types` (
+  `id` int(11) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE loan_applications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     loan_type_id int(11) DEFAULT NULL,
@@ -894,6 +907,8 @@ CREATE TABLE loan_applications (
     loan_terms VARCHAR(50) DEFAULT NULL,
     loan_amount DECIMAL(12,2) DEFAULT NULL,
     purpose TEXT DEFAULT NULL,
+    loan_valid_id_type INT(11) DEFAULT NULL,
+    valid_id_number VARCHAR(150) DEFAULT NULL,
     monthly_payment DECIMAL(10,2) DEFAULT NULL,
     due_date DATE DEFAULT NULL,
     -- Application workflow
@@ -919,6 +934,7 @@ CREATE TABLE loan_applications (
     -- Link to approved loan (set when application is approved and loan created)
     loan_id BIGINT DEFAULT NULL,
     FOREIGN KEY (loan_type_id) REFERENCES loan_types(id) ON DELETE SET NULL,
+    FOREIGN KEY (loan_valid_id_type) REFERENCES loan_valid_id(id) ON DELETE SET NULL,
     FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (rejected_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE SET NULL,
@@ -930,11 +946,6 @@ CREATE TABLE loan_applications (
     INDEX idx_rejected_by_user_id (rejected_by_user_id),
     INDEX idx_loan_id (loan_id)
 );
-
-CREATE TABLE `loan_application_types` (
-  `id` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 ALTER TABLE loans 

@@ -2390,6 +2390,20 @@ INSERT INTO `loan_application_types` (`id`, `name`) VALUES
 (3, 'Home Loan'),
 (4, 'Multi-Purpose Loan'),
 (1, 'Personal Loan');
+
+INSERT INTO `loan_valid_id` (`id`, `loan_valid_id_type`, `valid_id_type`) VALUES
+(1, 1, 'Driver\'s License'),
+(2, 2, 'Postal Id'),
+(3, 3, 'GSIS'),
+(4, 4, 'NBI Clearance'),
+(5, 5, 'Passport'),
+(6, 6, 'National Id'),
+(7, 7, 'UMId'),
+(8, 8, 'Voter\'s ID'),
+(9, 9, 'PRC ID'),
+(10, 10, 'Postal ID'),
+(11, 11, 'PhilHealth ID'),
+(12, 12, 'Seniror Citizen ID');
 -- ========================================
 -- 11. LOAN PAYMENTS DATA
 -- ========================================
