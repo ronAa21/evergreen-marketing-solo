@@ -1,4 +1,3 @@
-
 <?php
 // ✅ CRITICAL: Start output buffering FIRST
 ob_start();
@@ -121,10 +120,7 @@ try {
     }
     $pdf->Ln(5);
 
-    // Date and greeting
-    $pdf->SetFont('Arial', '', 11);
-    $pdf->Cell(0, 8, 'Date: ' . date('F j, Y'), 0, 1, 'L');
-    $pdf->Ln(5);
+    // Greeting
     $pdf->SetFont('Arial', 'B', 12);
     $pdf->Cell(0, 8, 'Dear ' . $loan['full_name'] . ',', 0, 1, 'L');
     $pdf->Ln(3);
@@ -161,7 +157,7 @@ try {
     $pdf->MultiCell(0, 6, $message, 0, 'L');
     $pdf->Ln(5);
 
-    // Loan details
+    // ✅ LOAN DETAILS SECTION (FIRST) - Removed Loan Duration
     $pdf->SetFont('Arial', 'B', 12);
     $pdf->Cell(0, 10, 'LOAN DETAILS', 0, 1, 'L');
     $pdf->SetFont('Arial', '', 10);
@@ -170,34 +166,16 @@ try {
         'Loan ID' => $loan['id'],
         'Loan Type' => $loan['loan_type_name'],
         'Loan Amount' => 'PHP ' . number_format($loan['loan_amount'], 2),
-        'Loan Term' => $loan['loan_terms'] ?? 'N/A',
         'Interest Rate' => '20% per annum',
         'Monthly Payment' => 'PHP ' . number_format($loan['monthly_payment'] ?? 0, 2),
         'Total Amount Payable' => 'PHP ' . number_format($loan['loan_amount'] * 1.20, 2)
     ];
 
     if ($notif_type === 'approved') {
-        if (!empty($loan['approved_at'])) {
-            $claim_deadline = date('F j, Y', strtotime($loan['approved_at'] . ' + 30 days'));
-            $details['Approval Date'] = date('F j, Y', strtotime($loan['approved_at']));
-            $details['Claim Deadline'] = $claim_deadline;
-        }
         $details['Status'] = 'Approved - Awaiting Claim';
     } elseif ($notif_type === 'active') {
-        if (!empty($loan['approved_at'])) {
-            $details['Activation Date'] = date('F j, Y', strtotime($loan['approved_at']));
-        }
-        if (!empty($loan['next_payment_due'])) {
-            $details['Next Payment Due'] = date('F j, Y', strtotime($loan['next_payment_due']));
-        }
-        if (!empty($loan['due_date'])) {
-            $details['Final Payment Due'] = date('F j, Y', strtotime($loan['due_date']));
-        }
         $details['Status'] = 'Active';
     } elseif ($notif_type === 'rejected') {
-        if (!empty($loan['rejected_at'])) {
-            $details['Rejection Date'] = date('F j, Y', strtotime($loan['rejected_at']));
-        }
         $details['Status'] = 'Rejected';
     }
 
@@ -206,6 +184,82 @@ try {
         $pdf->Cell(60, 7, $label . ':', 0, 0, 'L');
         $pdf->SetFont('Arial', '', 10);
         $pdf->Cell(0, 7, $value, 0, 1, 'L');
+    }
+
+    $pdf->Ln(5);
+
+    // ✅ IMPORTANT DETAILS SECTION (REVISED)
+    $pdf->SetFont('Arial', 'B', 12);
+    $pdf->Cell(0, 10, 'TIME DURATION', 0, 1, 'L');
+    $pdf->SetFont('Arial', '', 10);
+    
+    // Date Where the Loan was Approved
+    if ($notif_type === 'approved' || $notif_type === 'active') {
+        if (!empty($loan['approved_at'])) {
+            $approved_date = date('F j, Y', strtotime($loan['approved_at']));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Date Approved:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $approved_date, 0, 1, 'L');
+        }
+    }
+    
+    // Date Where it Started (for active loans only)
+    if ($notif_type === 'active') {
+        if (!empty($loan['approved_at'])) {
+            $term_start = date('F j, Y', strtotime($loan['approved_at']));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Date Where it Started:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $term_start, 0, 1, 'L');
+        }
+    }
+    
+    // Loan Duration (moved from Loan Details)
+    if (!empty($loan['loan_terms'])) {
+        $pdf->SetFont('Arial', 'B', 10);
+        $pdf->Cell(60, 7, 'Loan Duration:', 0, 0, 'L');
+        $pdf->SetFont('Arial', '', 10);
+        $pdf->Cell(0, 7, $loan['loan_terms'], 0, 1, 'L');
+    }
+    
+    // Deadline of the Loan
+    if ($notif_type === 'approved') {
+        // For approved loans - show claim deadline
+        if (!empty($loan['approved_at'])) {
+            $claim_deadline = date('F j, Y', strtotime($loan['approved_at'] . ' + 30 days'));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Deadline of the Loan:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $claim_deadline , 0, 1, 'L');
+        }
+    } elseif ($notif_type === 'active') {
+        // For active loans - show final payment deadline
+        if (!empty($loan['due_date'])) {
+            $loan_deadline = date('F j, Y', strtotime($loan['due_date']));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Deadline of the Loan:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $loan_deadline . ' (Final Payment)', 0, 1, 'L');
+        }
+        
+        // Next Payment Due (for active loans)
+        if (!empty($loan['next_payment_due'])) {
+            $next_payment = date('F j, Y', strtotime($loan['next_payment_due']));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Next Payment Due:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $next_payment, 0, 1, 'L');
+        }
+    } elseif ($notif_type === 'rejected') {
+        // For rejected loans - show rejection date
+        if (!empty($loan['rejected_at'])) {
+            $rejected_date = date('F j, Y', strtotime($loan['rejected_at']));
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->Cell(60, 7, 'Rejection Date:', 0, 0, 'L');
+            $pdf->SetFont('Arial', '', 10);
+            $pdf->Cell(0, 7, $rejected_date, 0, 1, 'L');
+        }
     }
 
     // Footer
@@ -252,7 +306,7 @@ try {
     echo json_encode([
         'success' => true, 
         'filename' => $filename,
-        'full_path' => $uploadDir . $filename, // Include full path
+        'full_path' => $uploadDir . $filename,
         'filesize' => $filesize,
         'type' => $notif_type,
         'loan_id' => $loan_id,

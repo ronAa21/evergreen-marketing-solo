@@ -75,7 +75,18 @@ if ($statusResult) {
         </thead>
         <tbody id="pendingTableBody">
           <?php
-          $result = $conn->query("SELECT la.*, lt.name AS loan_type_name FROM loan_applications la LEFT JOIN loan_types lt ON la.loan_type_id = lt.id WHERE la.status = 'Pending' ORDER BY la.id DESC");
+          // ✅ FIXED: Corrected JOIN condition
+          $result = $conn->query("
+            SELECT 
+              la.*, 
+              lt.name AS loan_type_name,
+              lvi.valid_id_type
+            FROM loan_applications la 
+            LEFT JOIN loan_types lt ON la.loan_type_id = lt.id 
+            LEFT JOIN loan_valid_id lvi ON la.loan_valid_id_type = lvi.loan_valid_id_type
+            WHERE la.status = 'Pending' 
+            ORDER BY la.id DESC
+          ");
           if ($result && $result->num_rows > 0):
             while ($row = $result->fetch_assoc()):
               $applied_date = date("m/d/Y", strtotime($row['created_at'] ?? 'now'));
@@ -119,7 +130,18 @@ if ($statusResult) {
         </thead>
         <tbody id="approvedTableBody">
           <?php
-          $result = $conn->query("SELECT la.*, lt.name AS loan_type_name FROM loan_applications la LEFT JOIN loan_types lt ON la.loan_type_id = lt.id WHERE la.status = 'Approved' ORDER BY la.approved_at DESC");
+          // ✅ FIXED: Corrected JOIN condition
+          $result = $conn->query("
+            SELECT 
+              la.*, 
+              lt.name AS loan_type_name,
+              lvi.valid_id_type
+            FROM loan_applications la 
+            LEFT JOIN loan_types lt ON la.loan_type_id = lt.id 
+            LEFT JOIN loan_valid_id lvi ON la.loan_valid_id_type = lvi.loan_valid_id_type
+            WHERE la.status = 'Approved' 
+            ORDER BY la.approved_at DESC
+          ");
           if ($result && $result->num_rows > 0):
             while ($row = $result->fetch_assoc()):
               $approved_date = date("m/d/Y", strtotime($row['approved_at'] ?? 'now'));
@@ -166,7 +188,7 @@ if ($statusResult) {
           <div class="field"><label>Monthly Salary</label><input type="text" id="modal-monthly-salary" readonly></div>
           <div class="field"><label>Date Applied</label><input type="text" id="modal-date-applied" readonly></div>
         </div>
-        <br>
+          </br>
         
         <!-- Loan Details -->
         <h3>Loan Details</h3>
@@ -175,8 +197,10 @@ if ($statusResult) {
           <div class="field"><label>Loan Term</label><input type="text" id="modal-loan-term" readonly></div>
           <div class="field"><label>Loan Amount</label><input type="text" id="modal-loan-amount" readonly></div>
           <div class="field"><label>Purpose</label><input type="text" id="modal-purpose" readonly></div>
+          <div class="field"><label>Valid ID Type</label><input type="text" id="modal-valid-id-type" readonly></div>
+          <div class="field"><label>Valid ID Number</label><input type="text" id="modal-valid-id-number" readonly></div>
         </div>
-        <br>
+          </br>
         
         <!-- Payment Summary -->
         <h3>Payment Summary (20% Annual Interest)</h3>
@@ -253,6 +277,10 @@ if ($statusResult) {
           document.getElementById('modal-loan-term').value = data.loan_terms || '';
           document.getElementById('modal-loan-amount').value = '₱' + parseFloat(data.loan_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
           document.getElementById('modal-purpose').value = data.purpose || '';
+          
+          // ✅ FIXED: Now correctly receives valid_id_type from API
+          document.getElementById('modal-valid-id-type').value = data.valid_id_type || 'N/A';
+          document.getElementById('modal-valid-id-number').value = data.valid_id_number || 'N/A';
           
           const monthlyPayment = parseFloat(data.monthly_payment) || 0;
           document.getElementById('modal-monthly-payment').value = '₱' + monthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2});

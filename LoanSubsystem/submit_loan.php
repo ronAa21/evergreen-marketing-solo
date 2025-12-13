@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 header('Content-Type: application/json');
@@ -27,7 +26,7 @@ try {
     $host = "localhost";
     $user = "root";
     $pass = "";
-    $db = "BankingDB";
+    $db = "bankingdb";
 
     $conn = new mysqli($host, $user, $pass, $db);
 
@@ -72,7 +71,12 @@ try {
     $loan_terms = isset($_POST['loan_terms']) ? trim($_POST['loan_terms']) : '';
     $loan_amount = isset($_POST['loan_amount']) ? (float)$_POST['loan_amount'] : 0;
     $purpose = isset($_POST['purpose']) ? trim($_POST['purpose']) : '';
+    
+    // ✅ FIXED: Get loan_valid_id_type (FK to loan_valid_id.id) and valid_id_number
+    $loan_valid_id_type = isset($_POST['loan_valid_id_type']) ? (int)$_POST['loan_valid_id_type'] : 0;
+    $valid_id_number = isset($_POST['valid_id_number']) ? trim($_POST['valid_id_number']) : '';
 
+    // Validation
     if ($loan_type_id <= 0) {
         throw new Exception("Invalid loan type selected.");
     }
@@ -88,6 +92,27 @@ try {
     if (empty($purpose)) {
         throw new Exception("Please provide the purpose of the loan.");
     }
+    
+    // Validate valid ID type and number
+    if ($loan_valid_id_type <= 0) {
+        throw new Exception("Please select a valid ID type.");
+    }
+    
+    if (empty($valid_id_number)) {
+        throw new Exception("Please enter your ID number.");
+    }
+
+    // ✅ FIXED: Verify that the loan_valid_id_type exists in loan_valid_id table
+    $verify_id_stmt = $conn->prepare("SELECT id FROM loan_valid_id WHERE id = ?");
+    if ($verify_id_stmt) {
+        $verify_id_stmt->bind_param("i", $loan_valid_id_type);
+        $verify_id_stmt->execute();
+        $verify_result = $verify_id_stmt->get_result();
+        if ($verify_result->num_rows === 0) {
+            throw new Exception("Invalid ID type selected.");
+        }
+        $verify_id_stmt->close();
+    }
 
     // Calculate monthly payment (20% annual interest rate)
     $interest_rate = 0.20; // 20% per annum
@@ -99,6 +124,9 @@ try {
     // Monthly payment calculation: P * (r(1+r)^n) / ((1+r)^n - 1)
     $monthly_rate = $interest_rate / 12;
     $monthly_payment = $loan_amount * ($monthly_rate * pow(1 + $monthly_rate, $term_months)) / (pow(1 + $monthly_rate, $term_months) - 1);
+    
+    // Round to 2 decimal places
+    $monthly_payment = round($monthly_payment, 2);
 
     // Handle file uploads
     $upload_dir = __DIR__ . '/uploads/';
@@ -111,9 +139,13 @@ try {
     $file_name = '';
     $proof_of_income = '';
     $coe_document = '';
+    $max_file_size = 5 * 1024 * 1024; // 5MB
 
     // Upload Valid ID
     if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+        if ($_FILES['attachment']['size'] > $max_file_size) {
+            throw new Exception("Valid ID file size exceeds 5MB limit.");
+        }
         $file_ext = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
         $allowed_ext = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'];
         if (!in_array($file_ext, $allowed_ext)) {
@@ -124,10 +156,15 @@ try {
         if (!move_uploaded_file($_FILES['attachment']['tmp_name'], $file_path)) {
             throw new Exception("Failed to upload valid ID.");
         }
+    } else {
+        throw new Exception("Please upload your valid ID.");
     }
 
     // Upload Proof of Income
     if (isset($_FILES['proof_of_income']) && $_FILES['proof_of_income']['error'] === UPLOAD_ERR_OK) {
+        if ($_FILES['proof_of_income']['size'] > $max_file_size) {
+            throw new Exception("Proof of Income file size exceeds 5MB limit.");
+        }
         $file_ext = strtolower(pathinfo($_FILES['proof_of_income']['name'], PATHINFO_EXTENSION));
         $allowed_ext = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'];
         if (!in_array($file_ext, $allowed_ext)) {
@@ -138,10 +175,15 @@ try {
         if (!move_uploaded_file($_FILES['proof_of_income']['tmp_name'], $proof_path)) {
             throw new Exception("Failed to upload proof of income.");
         }
+    } else {
+        throw new Exception("Please upload your proof of income.");
     }
 
     // Upload COE Document
     if (isset($_FILES['coe_document']) && $_FILES['coe_document']['error'] === UPLOAD_ERR_OK) {
+        if ($_FILES['coe_document']['size'] > $max_file_size) {
+            throw new Exception("COE document file size exceeds 5MB limit.");
+        }
         $file_ext = strtolower(pathinfo($_FILES['coe_document']['name'], PATHINFO_EXTENSION));
         $allowed_ext = ['pdf', 'doc', 'docx'];
         if (!in_array($file_ext, $allowed_ext)) {
@@ -152,6 +194,8 @@ try {
         if (!move_uploaded_file($_FILES['coe_document']['tmp_name'], $coe_path)) {
             throw new Exception("Failed to upload COE document.");
         }
+    } else {
+        throw new Exception("Please upload your Certificate of Employment (COE).");
     }
 
     // Get full name and other user details
@@ -160,7 +204,7 @@ try {
     $contact_number = $currentUser['contact_number'] ?? '';
     $user_email_db = $currentUser['email'] ?? $email;
 
-    // ✅ FIXED: Removed loan_type column from INSERT
+    // ✅ FIXED: Insert into loan_applications with correct column name loan_valid_id_type
     $insert_stmt = $conn->prepare("INSERT INTO loan_applications (
         loan_type_id,
         full_name,
@@ -171,57 +215,67 @@ try {
         loan_terms,
         loan_amount,
         purpose,
+        loan_valid_id_type,
+        valid_id_number,
         monthly_payment,
         status,
         file_name,
         proof_of_income,
         coe_document,
         created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, NOW())");
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, NOW())");
 
     if (!$insert_stmt) {
         throw new Exception("Database prepare error: " . $conn->error);
     }
 
-    // ✅ FIXED: Removed loan_type_name from bind_param (changed from "isssssssdsssss" to "isssssssdssss")
+    // ✅ FIXED: Bind parameters - 15 total parameters
+    // Types: i=integer, s=string, d=double
+    // Order: loan_type_id(i), full_name(s), account_number(s), contact_number(s), 
+    //        email(s), user_email(s), loan_terms(s), loan_amount(d), purpose(s),
+    //        loan_valid_id_type(i), valid_id_number(s), monthly_payment(d), 
+    //        file_name(s), proof_of_income(s), coe_document(s)
+    
     $insert_stmt->bind_param(
-        "isssssssdssss",
-        $loan_type_id,
-        $full_name,
-        $account_number,
-        $contact_number,
-        $user_email_db,
-        $email,
-        $loan_terms,
-        $loan_amount,
-        $purpose,
-        $monthly_payment,
-        $file_name,
-        $proof_of_income,
-        $coe_document
+        "issssssdsisssss",
+        $loan_type_id,           // i - integer
+        $full_name,              // s - string
+        $account_number,         // s - string
+        $contact_number,         // s - string
+        $user_email_db,          // s - string (email column)
+        $email,                  // s - string (user_email column)
+        $loan_terms,             // s - string
+        $loan_amount,            // d - double
+        $purpose,                // s - string
+        $loan_valid_id_type,     // i - integer (FK to loan_valid_id.id)
+        $valid_id_number,        // s - string
+        $monthly_payment,        // d - double
+        $file_name,              // s - string
+        $proof_of_income,        // s - string
+        $coe_document            // s - string
     );
 
     if (!$insert_stmt->execute()) {
         throw new Exception("Failed to submit loan application: " . $insert_stmt->error);
     }
 
-    $loan_id = $insert_stmt->insert_id;
+    $loan_id = $insert_stmt->insert_id; 
     $insert_stmt->close();
     $conn->close();
 
-// At the end of submit_loan.php, replace the response with:
-
-$response['success'] = true;
-$response['loan_id'] = $loan_id;
-$response['message'] = 'Loan application submitted successfully!';
-$response['redirect'] = 'index.php?scrollTo=dashboard'; // ✅ Add redirect URL
+    $response['success'] = true;
+    $response['loan_id'] = $loan_id;
+    $response['message'] = 'Loan application submitted successfully!';
+    $response['reference_number'] = 'LOAN-' . str_pad($loan_id, 6, '0', STR_PAD_LEFT);
+    $response['date'] = date('F d, Y');
 
 } catch (Exception $e) {
     $response['success'] = false;
     $response['error'] = $e->getMessage();
     
-    // Log the error
+    // Log the error with details
     error_log("Loan Submission Error: " . $e->getMessage());
+    error_log("Line: " . $e->getLine());
 }
 
 echo json_encode($response);

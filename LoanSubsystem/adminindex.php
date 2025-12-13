@@ -268,6 +268,65 @@ $totalLoans = array_sum($counts);
       </div>
     </div>
 
+    
+
+    <h1>All Loan Records</h1>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Loan ID</th>
+            <th>Client Name</th>
+            <th>Loan Type</th>
+            <th>Amount</th>
+            <th>Loan Officer ID</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="loansTableBody">
+          <?php
+          $result = $conn->query("
+            SELECT 
+              la.id,
+              la.full_name,
+              la.loan_amount,
+              la.created_at,
+              la.status,
+              COALESCE(lt.name, 'Unknown Type') AS loan_type_display
+            FROM loan_applications la
+            LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
+            ORDER BY la.id DESC
+          ");
+          
+          if ($result && $result->num_rows > 0):
+            while ($row = $result->fetch_assoc()):
+              $date = date("m/d/Y", strtotime($row['created_at'] ?? 'now'));
+              $time = date("h:i A", strtotime($row['created_at'] ?? 'now'));
+              $statusClass = strtolower($row['status']);
+          ?>
+              <tr data-status="<?= htmlspecialchars($row['status']) ?>">
+                <td><?= htmlspecialchars($row['id']) ?></td>
+                <td><?= htmlspecialchars($row['full_name']) ?></td>
+                <td><?= htmlspecialchars($row['loan_type_display']) ?></td>
+                <td>₱<?= number_format($row['loan_amount'], 2) ?></td>
+                <td><?= htmlspecialchars($_SESSION['loan_officer_id'] ?? 'LO-0123') ?></td>
+                <td><?= $date ?> <?= $time ?></td>
+                <td class="<?= $statusClass ?>"><?= htmlspecialchars($row['status']) ?></td>
+                <td>
+                  <button onclick="viewLoanDetails(<?= (int)$row['id'] ?>)">View Details</button>
+                </td>
+              </tr>
+            <?php endwhile;
+          else: ?>
+            <tr><td colspan="8" style="text-align:center;">No records found</td></tr>
+          <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+
+
     <!-- Analytics Section -->
     <div class="analytics-section">
       <div class="analytics-header">
@@ -330,62 +389,7 @@ $totalLoans = array_sum($counts);
         </button>
       </div>
     </div>
-
-    <h1>All Loan Records</h1>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>Loan ID</th>
-            <th>Client Name</th>
-            <th>Loan Type</th>
-            <th>Amount</th>
-            <th>Loan Officer ID</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="loansTableBody">
-          <?php
-          $result = $conn->query("
-            SELECT 
-              la.id,
-              la.full_name,
-              la.loan_amount,
-              la.created_at,
-              la.status,
-              COALESCE(lt.name, 'Unknown Type') AS loan_type_display
-            FROM loan_applications la
-            LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
-            ORDER BY la.id DESC
-          ");
-          
-          if ($result && $result->num_rows > 0):
-            while ($row = $result->fetch_assoc()):
-              $date = date("m/d/Y", strtotime($row['created_at'] ?? 'now'));
-              $time = date("h:i A", strtotime($row['created_at'] ?? 'now'));
-              $statusClass = strtolower($row['status']);
-          ?>
-              <tr data-status="<?= htmlspecialchars($row['status']) ?>">
-                <td><?= htmlspecialchars($row['id']) ?></td>
-                <td><?= htmlspecialchars($row['full_name']) ?></td>
-                <td><?= htmlspecialchars($row['loan_type_display']) ?></td>
-                <td>₱<?= number_format($row['loan_amount'], 2) ?></td>
-                <td><?= htmlspecialchars($_SESSION['loan_officer_id'] ?? 'LO-0123') ?></td>
-                <td><?= $date ?> <?= $time ?></td>
-                <td class="<?= $statusClass ?>"><?= htmlspecialchars($row['status']) ?></td>
-                <td>
-                  <button onclick="viewLoanDetails(<?= (int)$row['id'] ?>)">View Details</button>
-                </td>
-              </tr>
-            <?php endwhile;
-          else: ?>
-            <tr><td colspan="8" style="text-align:center;">No records found</td></tr>
-          <?php endif; ?>
-        </tbody>
-      </table>
-    </div>
+    
   </main>
 
   <!-- View Details Modal -->
@@ -405,6 +409,8 @@ $totalLoans = array_sum($counts);
           <p><strong>Email:</strong> <span id="modal-email"></span></p>
           <p><strong>Job Title:</strong> <span id="modal-job"></span></p>
           <p><strong>Monthly Salary:</strong> ₱<span id="modal-monthly-salary"></span></p>
+          <p><strong>Valid ID Type:</strong> <span id="modal-valid-id-type"></span></p>
+          <p><strong>Valid ID Number:</strong> <span id="modal-valid-id-number"></span></p>
 
           <hr>
           <div id="approval-info" style="display:none;">
@@ -543,6 +549,10 @@ $totalLoans = array_sum($counts);
           document.getElementById('modal-email').textContent = data.email || '';
           document.getElementById('modal-job').textContent = data.job || '';
           document.getElementById('modal-monthly-salary').textContent = parseFloat(data.monthly_salary || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+          
+          // ✅ FIXED: Display Valid ID Type and Number
+          document.getElementById('modal-valid-id-type').textContent = data.valid_id_type || 'N/A';
+          document.getElementById('modal-valid-id-number').textContent = data.valid_id_number || 'N/A';
 
           document.getElementById('modal-loan-type').textContent = data.loan_type || '';
           document.getElementById('modal-loan-amount').textContent = parseFloat(data.loan_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});

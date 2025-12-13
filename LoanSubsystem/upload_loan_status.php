@@ -1,8 +1,32 @@
 <?php
-ob_start();
 session_start();
 date_default_timezone_set('Asia/Manila');
+
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 header('Content-Type: application/json');
+
+// ✅ FIX: Use correct path for PHPMailer
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
+
+// Check if files exist before requiring
+$phpmailer_path = __DIR__ . '/PHPMailer-7.0.0/src/';
+
+if (!file_exists($phpmailer_path . 'Exception.php')) {
+    error_log("PHPMailer not found at: " . $phpmailer_path);
+    echo json_encode(['success' => false, 'error' => 'PHPMailer library not found']);
+    exit;
+}
+
+require $phpmailer_path . 'Exception.php';
+require $phpmailer_path . 'PHPMailer.php';
+require $phpmailer_path . 'SMTP.php';
+
+// Rest of your code...
 
 // Check if user is logged in
 if (!isset($_SESSION['user_email'])) {
@@ -34,8 +58,23 @@ if ($loan_id <= 0) {
     exit;
 }
 
-// Fetch loan details including email
-$stmt = $conn->prepare("SELECT full_name, loan_amount, loan_terms, monthly_payment, email, user_email FROM loan_applications WHERE id = ?");
+// Fetch loan details including email and loan type
+$stmt = $conn->prepare("
+    SELECT 
+        la.full_name, 
+        la.loan_amount, 
+        la.loan_terms, 
+        la.monthly_payment, 
+        la.email, 
+        la.user_email,
+        la.next_payment_due,
+        la.due_date,
+        lt.name AS loan_type
+    FROM loan_applications la
+    LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
+    WHERE la.id = ?
+");
+
 if (!$stmt) {
     echo json_encode(['success' => false, 'error' => 'Database error']);
     exit;
@@ -62,11 +101,13 @@ $full_name = $loan['full_name'];
 $loan_amount = number_format($loan['loan_amount'], 2);
 $monthly_payment = number_format($loan['monthly_payment'], 2);
 $term = $loan['loan_terms'];
+$loan_type = $loan['loan_type'] ?? 'Personal Loan';
 
 // Process based on action
 $remarks = '';
 $alert_message = '';
-$update_query = '';
+$send_email = false;
+$email_type = '';
 
 switch ($action) {
     case 'first_approve':
@@ -76,6 +117,8 @@ switch ($action) {
         $stmt = $conn->prepare("UPDATE loan_applications SET status = 'Approved', remarks = ?, approved_by = ?, approved_at = NOW() WHERE id = ?");
         $stmt->bind_param("ssi", $remarks, $admin_name, $loan_id);
         $alert_message = "Loan approved! Client must claim within 30 days.";
+        $send_email = true;
+        $email_type = 'approved';
         break;
 
     case 'second_approve':
@@ -88,6 +131,8 @@ switch ($action) {
         $stmt = $conn->prepare("UPDATE loan_applications SET status = 'Active', remarks = ?, next_payment_due = ?, due_date = ? WHERE id = ?");
         $stmt->bind_param("sssi", $remarks, $next_payment, $final_due, $loan_id);
         $alert_message = "Loan activated successfully!";
+        $send_email = true;
+        $email_type = 'active';
         break;
 
     case 'first_reject':
@@ -98,6 +143,8 @@ switch ($action) {
         $stmt = $conn->prepare("UPDATE loan_applications SET status = 'Rejected', remarks = ?, rejection_remarks = ?, rejected_by = ?, rejected_at = NOW() WHERE id = ?");
         $stmt->bind_param("sssi", $remarks, $reason, $admin_name, $loan_id);
         $alert_message = "Loan rejected successfully.";
+        $send_email = true;
+        $email_type = 'rejected';
         break;
 
     case 'second_reject':
@@ -108,6 +155,8 @@ switch ($action) {
         $stmt = $conn->prepare("UPDATE loan_applications SET status = 'Rejected', remarks = ?, rejection_remarks = ?, rejected_by = ?, rejected_at = NOW() WHERE id = ?");
         $stmt->bind_param("sssi", $remarks, $reason, $admin_name, $loan_id);
         $alert_message = "Approved loan cancelled.";
+        $send_email = true;
+        $email_type = 'cancelled';
         break;
 
     default:
@@ -130,10 +179,8 @@ if ($stmt->execute()) {
             $credit_error = "No email found in loan application (loan_id: {$loan_id})";
             error_log("Loan Credit Error [Loan {$loan_id}]: {$credit_error}");
         } else {
-            // Log email being used for lookup
             error_log("Loan Credit Debug [Loan {$loan_id}]: Looking up account for email: {$customer_email}");
             
-            // Try to find account - first attempt: prefer Savings account, active status
             $account_stmt = $conn->prepare("
                 SELECT ca.account_id, ca.account_number, ca.account_status, ca.is_locked
                 FROM customer_accounts ca
@@ -162,7 +209,6 @@ if ($stmt->execute()) {
                     $account_number = $account['account_number'];
                     error_log("Loan Credit Debug [Loan {$loan_id}]: Found account_id: {$account_id}, account_number: {$account_number}");
                 } else {
-                    // Fallback: try any unlocked account (even if status is not 'active')
                     error_log("Loan Credit Debug [Loan {$loan_id}]: No active account found, trying fallback query");
                     $account_stmt->close();
                     
@@ -188,7 +234,6 @@ if ($stmt->execute()) {
                             $account_number = $account['account_number'];
                             error_log("Loan Credit Debug [Loan {$loan_id}]: Fallback found account_id: {$account_id}, account_number: {$account_number}");
                         } else {
-                            // Last attempt: try with user_email field if different
                             $fallback_stmt->close();
                             if (!empty($loan['user_email']) && $loan['user_email'] !== $customer_email) {
                                 error_log("Loan Credit Debug [Loan {$loan_id}]: Trying user_email field: {$loan['user_email']}");
@@ -225,7 +270,7 @@ if ($stmt->execute()) {
                     }
                 }
                 
-                if ($account_stmt && !$account_stmt->closed) {
+                if (isset($account_stmt) && $account_stmt instanceof mysqli_stmt) {
                     $account_stmt->close();
                 }
             } else {
@@ -233,16 +278,13 @@ if ($stmt->execute()) {
                 error_log("Loan Credit Error [Loan {$loan_id}]: {$credit_error}");
             }
             
-            // If account found, insert transaction
             if ($account_id && $account_number) {
-                // Transaction type ID 6 = Loan Disbursement
                 $transaction_ref = 'LOAN-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
-                $loan_amount_raw = (float)$loan['loan_amount']; // Use raw amount, not formatted
+                $loan_amount_raw = (float)$loan['loan_amount'];
                 $description = "Loan Disbursement - Loan ID: {$loan_id}, Account: {$account_number}";
                 
                 error_log("Loan Credit Debug [Loan {$loan_id}]: Inserting transaction - ref: {$transaction_ref}, account_id: {$account_id}, amount: {$loan_amount_raw}");
                 
-                // Insert transaction into bank_transactions
                 $transaction_stmt = $conn->prepare("
                     INSERT INTO bank_transactions (
                         transaction_ref,
@@ -281,6 +323,17 @@ if ($stmt->execute()) {
         }
     }
     
+    // Send email notification
+    if ($send_email && $customer_email) {
+        $email_sent = sendLoanEmail($customer_email, $full_name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp, $email_type, $loan, $custom_remarks);
+        
+        if ($email_sent) {
+            error_log("Email notification sent successfully to {$customer_email} for loan {$loan_id} ({$email_type})");
+        } else {
+            error_log("Failed to send email notification to {$customer_email} for loan {$loan_id} ({$email_type})");
+        }
+    }
+    
     // Build response
     $response = [
         'success' => true,
@@ -288,14 +341,12 @@ if ($stmt->execute()) {
         'new_status' => $status
     ];
     
-    // Include credit status in response for debugging
     if ($action === 'second_approve') {
         if ($credit_success) {
             $response['credit_status'] = 'success';
         } else if ($credit_error) {
             $response['credit_status'] = 'error';
             $response['credit_error'] = $credit_error;
-            // Append error to message so admin sees it
             $response['message'] .= " Warning: Account credit failed - " . $credit_error;
         }
     }
@@ -307,4 +358,193 @@ if ($stmt->execute()) {
 
 $stmt->close();
 $conn->close();
+exit;
+
+// ==================== EMAIL FUNCTIONS ====================
+
+function sendLoanEmail($email, $name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp, $email_type, $loan_data, $rejection_reason = '') {
+    $mail = new PHPMailer(true);
+    
+    try {
+        $mail->SMTPDebug = SMTP::DEBUG_OFF;
+        $mail->isSMTP();
+        $mail->Host = 'smtp.gmail.com';
+        $mail->SMTPAuth = true;
+        $mail->Username = 'evrgrn.64@gmail.com';
+        $mail->Password = 'dourhhbymvjejuct';
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = 587;
+        
+        $mail->SMTPOptions = array(
+            'ssl' => array(
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true
+            )
+        );
+        $mail->Timeout = 30;
+        
+        $mail->setFrom('evrgrn.64@gmail.com', 'Evergreen Banking');
+        $mail->addAddress($email, $name);
+        
+        switch ($email_type) {
+            case 'approved':
+                $mail->Subject = 'Evergreen Banking - Loan Application APPROVED';
+                $mail->Body = getApprovedEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp);
+                break;
+                
+            case 'active':
+                $mail->Subject = 'Evergreen Banking - Your Loan is Now ACTIVE';
+                $mail->Body = getActiveEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp, $loan_data);
+                break;
+                
+            case 'rejected':
+                $mail->Subject = 'Evergreen Banking - Loan Application Status Update';
+                $mail->Body = getRejectedEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $rejection_reason, $admin_name, $timestamp);
+                break;
+                
+            case 'cancelled':
+                $mail->Subject = 'Evergreen Banking - Approved Loan Cancelled';
+                $mail->Body = getCancelledEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $rejection_reason, $admin_name, $timestamp);
+                break;
+                
+            default:
+                return false;
+        }
+        
+        $mail->isHTML(true);
+        $mail->send();
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("PHPMailer Error: " . $mail->ErrorInfo);
+        return false;
+    }
+}
+
+function getApprovedEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp) {
+    $total_payable = number_format((float)str_replace(',', '', $loan_amount) * 1.20, 2);
+    
+    return "
+        <html>
+        <body style='font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;'>
+            <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 28px; font-weight: 600;'>✅ Loan Approved!</h1>
+                </div>
+                <div style='padding: 30px;'>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Dear <strong>{$name}</strong>,</p>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Congratulations! Your loan application has been <strong style='color: #28a745;'>APPROVED</strong>.</p>
+                    <div style='background: #d4edda; border-left: 4px solid #28a745; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #155724; margin-top: 0; font-size: 18px;'>⚠️ Important: Claim Your Loan</h3>
+                        <p style='color: #155724; margin: 10px 0; font-size: 15px; line-height: 1.6;'>Please visit our bank <strong>within 30 days</strong> to claim your approved loan.</p>
+                    </div>
+                    <div style='background: #f8f9fa; border-left: 4px solid #0d3d38; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #0d3d38; margin-top: 0; font-size: 18px;'>📋 Loan Details</h3>
+                        <table style='width: 100%; border-collapse: collapse;'>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Loan ID:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>{$loan_id}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Loan Type:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>{$loan_type}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Approved Amount:</td><td style='padding: 8px 0; color: #0d3d38; font-weight: 700; font-size: 16px; text-align: right;'>₱{$loan_amount}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Loan Term:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>{$term}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Monthly Payment:</td><td style='padding: 8px 0; color: #0d3d38; font-weight: 700; font-size: 16px; text-align: right;'>₱{$monthly_payment}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Total Payable:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>₱{$total_payable}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div style='background: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;'>
+                    <p style='color: #999; font-size: 12px; margin: 5px 0;'>© 2025 Evergreen Banking. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    ";
+}
+
+function getActiveEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $monthly_payment, $term, $admin_name, $timestamp, $loan_data) {
+    $total_payable = number_format((float)str_replace(',', '', $loan_amount) * 1.20, 2);
+    $next_payment = $loan_data['next_payment_due'] ?? date('Y-m-d', strtotime('+1 month'));
+    $final_payment = $loan_data['due_date'] ?? date('Y-m-d', strtotime("+{$term}"));
+    $first_payment_due = date('F j, Y', strtotime($next_payment));
+    $final_payment_date = date('F j, Y', strtotime($final_payment));
+    
+    return "
+        <html>
+        <body style='font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;'>
+            <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='background: linear-gradient(135deg, #0d3d38 0%, #1a6b62 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 28px; font-weight: 600;'>🎉 Loan Activated!</h1>
+                </div>
+                <div style='padding: 30px;'>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Dear <strong>{$name}</strong>,</p>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Your loan has been <strong style='color: #28a745;'>ACTIVATED</strong>. The amount has been credited to your account.</p>
+                    <div style='background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #0c5460; margin-top: 0; font-size: 18px;'>💡 Payment Information</h3>
+                        <p style='color: #0c5460; margin: 10px 0; font-size: 15px;'><strong>First Payment Due:</strong> {$first_payment_due}<br><strong>Final Payment:</strong> {$final_payment_date}</p>
+                    </div>
+                </div>
+                <div style='background: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;'>
+                    <p style='color: #999; font-size: 12px; margin: 5px 0;'>© 2025 Evergreen Banking. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    ";
+}
+
+function getRejectedEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $reason, $admin_name, $timestamp) {
+    return "
+        <html>
+        <body style='font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;'>
+            <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 28px; font-weight: 600;'>❌ Loan Application Update</h1>
+                </div>
+                <div style='padding: 30px;'>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Dear <strong>{$name}</strong>,</p>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Your loan application has been <strong style='color: #dc3545;'>REJECTED</strong>.</p>
+                    <div style='background: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #721c24; margin-top: 0; font-size: 18px;'>ℹ️ Reason</h3>
+                        <p style='color: #721c24; margin: 10px 0; font-size: 15px;'>{$reason}</p>
+                    </div>
+                </div>
+                <div style='background: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;'>
+                    <p style='color: #999; font-size: 12px; margin: 5px 0;'>© 2025 Evergreen Banking. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    ";
+}
+function getCancelledEmailTemplate($name, $loan_id, $loan_type, $loan_amount, $reason, $admin_name, $timestamp) {
+    return "
+        <html>
+        <body style='font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;'>
+            <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 28px; font-weight: 600;'>❌ Approved Loan Cancelled</h1>
+                </div>
+                <div style='padding: 30px;'>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Dear <strong>{$name}</strong>,</p>
+                    <p style='font-size: 16px; color: #333; line-height: 1.6;'>Your approved loan has been <strong style='color: #dc3545;'>CANCELLED</strong>.</p>
+                    <div style='background: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #721c24; margin-top: 0; font-size: 18px;'>ℹ️ Reason for Cancellation</h3>
+                        <p style='color: #721c24; margin: 10px 0; font-size: 15px;'>{$reason}</p>
+                    </div>
+                    <div style='background: #f8f9fa; border-left: 4px solid #0d3d38; padding: 20px; margin: 25px 0; border-radius: 8px;'>
+                        <h3 style='color: #0d3d38; margin-top: 0; font-size: 18px;'>📋 Loan Details</h3>
+                        <table style='width: 100%; border-collapse: collapse;'>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Loan ID:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>{$loan_id}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Loan Type:</td><td style='padding: 8px 0; color: #333; font-weight: 600; text-align: right;'>{$loan_type}</td></tr>
+                            <tr><td style='padding: 8px 0; color: #666; font-size: 14px;'>Approved Amount:</td><td style='padding: 8px 0; color: #0d3d38; font-weight: 700; font-size: 16px; text-align: right;'>₱{$loan_amount}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div style='background: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;'>
+                    <p style='color: #999; font-size: 12px; margin: 5px 0;'>© 2025 Evergreen Banking. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+    ";
+}
 ?>

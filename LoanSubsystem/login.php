@@ -20,47 +20,41 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $selectedRole = $_POST['role'] ?? 'client';
-
-    $user = null;
     
-    // Check based on selected role
-    if ($selectedRole === 'admin') {
-        // Try to authenticate as admin using BankingDB.users table
-        $user = verifyAdminPassword($email, $password);
-        if ($user) {
-            $_SESSION['user_email'] = $user['email'];
-            $_SESSION['user_name'] = $user['full_name'] ?? $user['display_name'];
-            $_SESSION['user_role'] = 'admin';
-            $_SESSION['loan_officer_id'] = $user['loan_officer_id'] ?? ('LO-' . str_pad($user['id'], 4, '0', STR_PAD_LEFT));
-            $_SESSION['customer_id'] = null; // Admin doesn't have customer_id
-            
-            header('Location: adminindex.php');
-            exit();
-        } else {
-            $error = "Invalid admin credentials or insufficient permissions.";
-        }
-    } else {
-        // Try to authenticate as customer using BankingDB.bank_customers table
-        $user = verifyUserPassword($email, $password);
-        if ($user) {
-            // Get additional customer info (already in $user from verifyUserPassword)
-            if (isset($user['id'])) {
-                $_SESSION['customer_id'] = $user['id'];
-                $_SESSION['account_number'] = $user['account_number'] ?? null;
-                $_SESSION['contact_number'] = $user['contact_number'] ?? null;
-            }
-            
-            $_SESSION['user_email'] = $user['email'];
-            $_SESSION['user_name'] = $user['full_name'] ?? $user['display_name'];
-            $_SESSION['user_role'] = 'client';
-            
-            header('Location: index.php');
-            exit();
-        } else {
-            $error = "Invalid email or password.";
-        }
+
+    $admin = verifyAdminPassword($email, $password);
+    
+    if ($admin) {
+        // Admin authenticated
+        $_SESSION['user_email'] = $admin['email'];
+        $_SESSION['user_name'] = $admin['full_name'] ?? $admin['display_name'];
+        $_SESSION['user_role'] = 'admin';
+        $_SESSION['loan_officer_id'] = $admin['loan_officer_id'] ?? ('LO-' . str_pad($admin['id'], 4, '0', STR_PAD_LEFT));
+        $_SESSION['customer_id'] = null;
+
+        header('Location: adminindex.php');
+        exit();
     }
+         // -------------------------------
+    // 2. If not admin, try client login
+    // -------------------------------
+    $client = verifyUserPassword($email, $password);
+
+    if ($client) {
+        $_SESSION['customer_id'] = $client['id'] ?? null;
+        $_SESSION['account_number'] = $client['account_number'] ?? null;
+        $_SESSION['contact_number'] = $client['contact_number'] ?? null;
+
+        $_SESSION['user_email'] = $client['email'];
+        $_SESSION['user_name'] = $client['full_name'] ?? $client['display_name'];
+        $_SESSION['user_role'] = 'client';
+
+        header('Location: index.php');
+        exit();
+    }
+
+    // If both fail:
+    $error = "Invalid email or password.";
 }
 ?>
 
@@ -217,14 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="password" id="password" name="password" required autocomplete="current-password" />
       </div>
 
-      <div class="role-selector">
-        <label>
-          <input type="radio" name="role" value="client" <?= (($_POST['role'] ?? 'client') === 'client') ? 'checked' : '' ?>> Client
-        </label>
-        <label>
-          <input type="radio" name="role" value="admin" <?= (($_POST['role'] ?? 'client') === 'admin') ? 'checked' : '' ?>> Admin
-        </label>
-      </div>
+     
 
       <button type="submit" class="btn-login">Login</button>
     </form>
