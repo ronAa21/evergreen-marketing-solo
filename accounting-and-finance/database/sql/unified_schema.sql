@@ -66,6 +66,7 @@ CREATE TABLE user_account (
     username VARCHAR(50) DEFAULT NULL,
     password_hash VARCHAR(255) DEFAULT NULL,
     role VARCHAR(20) DEFAULT NULL,
+    managed_department_id INT DEFAULT NULL,
     last_login DATETIME DEFAULT NULL,
     UNIQUE KEY username (username),
     INDEX idx_employee_id (employee_id)
@@ -280,6 +281,48 @@ CREATE TABLE system_logs (
     INDEX idx_employee_id (employee_id),
     FOREIGN KEY (user_id) REFERENCES user_account(user_id) ON DELETE SET NULL,
     FOREIGN KEY (employee_id) REFERENCES employee(employee_id) ON DELETE SET NULL
+);
+
+-- ========================================
+-- ROLE CHANGE AUDIT LOG TABLE
+-- ========================================
+CREATE TABLE IF NOT EXISTS role_change_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    changed_by INT NOT NULL,
+    old_role VARCHAR(20) DEFAULT NULL,
+    new_role VARCHAR(20) NOT NULL,
+    old_department_id INT DEFAULT NULL,
+    new_department_id INT DEFAULT NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_changed_at (changed_at),
+    FOREIGN KEY (user_id) REFERENCES user_account(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (changed_by) REFERENCES user_account(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (old_department_id) REFERENCES department(department_id) ON DELETE SET NULL,
+    FOREIGN KEY (new_department_id) REFERENCES department(department_id) ON DELETE SET NULL
+);
+
+-- ========================================
+-- EVENT PARTICIPANTS TABLE
+-- ========================================
+CREATE TABLE IF NOT EXISTS event_participants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id INT NOT NULL,
+    employee_id INT NOT NULL,
+    rsvp_status ENUM('Pending', 'Accepted', 'Declined', 'Maybe') DEFAULT 'Pending',
+    rsvp_date DATETIME DEFAULT NULL,
+    invited_by INT DEFAULT NULL,
+    notified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_event_id (event_id),
+    INDEX idx_employee_id (employee_id),
+    INDEX idx_rsvp_status (rsvp_status),
+    FOREIGN KEY (event_id) REFERENCES recruitment(recruitment_id) ON DELETE CASCADE,
+    FOREIGN KEY (employee_id) REFERENCES employee(employee_id) ON DELETE CASCADE,
+    FOREIGN KEY (invited_by) REFERENCES user_account(user_id) ON DELETE SET NULL,
+    UNIQUE KEY unique_participant (event_id, employee_id)
 );
 
 -- ========================================
@@ -1509,6 +1552,194 @@ SET @sql = IF(@col_exists3 = 0,
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
+
+-- ========================================
+-- HRIS ROLE MANAGEMENT MIGRATIONS
+-- ========================================
+-- Add foreign key constraint for managed_department_id in user_account
+SET @constraint_exists = (
+    SELECT COUNT(*) 
+    FROM information_schema.TABLE_CONSTRAINTS 
+    WHERE TABLE_SCHEMA = 'BankingDB' 
+    AND TABLE_NAME = 'user_account' 
+    AND CONSTRAINT_NAME = 'fk_user_account_department'
+);
+
+SET @sql = IF(@constraint_exists = 0,
+    'ALTER TABLE user_account ADD CONSTRAINT fk_user_account_department FOREIGN KEY (managed_department_id) REFERENCES department(department_id) ON DELETE SET NULL',
+    'SELECT "Constraint already exists" AS message'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- ========================================
+-- REMOVE MANAGER ROLE - TRANSFER TO SUPERVISOR
+-- ========================================
+UPDATE user_account SET role = 'Supervisor' WHERE role = 'Manager';
+
+-- Set managed_department_id for ALL existing Supervisors based on their employee's department
+UPDATE user_account ua
+JOIN employee e ON ua.employee_id = e.employee_id
+SET ua.managed_department_id = e.department_id
+WHERE ua.role = 'Supervisor' 
+AND (ua.managed_department_id IS NULL OR ua.managed_department_id = 0);
+
+-- ========================================
+-- CLEANUP DUPLICATE ACCOUNTS
+-- ========================================
+DELETE FROM user_account WHERE username = 'manager';
+DELETE FROM user_account WHERE username = 'supervisor';
+DELETE FROM user_account WHERE username LIKE 'supervisor_%';
+
+-- ========================================
+-- ADD LOAN OFFICER POSITION
+-- ========================================
+INSERT INTO `position` (position_id, position_title, job_description, salary_grade) 
+VALUES (25, 'Loan Officer', 'Loan Officer - Reviews and approves loan applications', 8)
+ON DUPLICATE KEY UPDATE position_title = 'Loan Officer';
+
+-- ========================================
+-- CLEANUP AND ENSURE ALL DEPARTMENTS EXIST
+-- ========================================
+SET FOREIGN_KEY_CHECKS = 0;
+
+DELETE d1 FROM department d1
+INNER JOIN department d2 
+WHERE d1.department_id > d2.department_id 
+AND d1.department_name = d2.department_name;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+INSERT INTO department (department_name) VALUES 
+    ('Customer Service'),
+    ('Finance'),
+    ('Human Resources'),
+    ('IT'),
+    ('Marketing'),
+    ('Operations'),
+    ('Sales')
+ON DUPLICATE KEY UPDATE department_name = VALUES(department_name);
+
+-- ========================================
+-- CREATE SUPERVISORS FOR EACH DEPARTMENT
+-- ========================================
+-- Password for all supervisors: 'password'
+
+-- Supervisor for Customer Service
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_cs',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Customer Service'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Finance
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_finance',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Finance'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Human Resources
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_hr',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Human Resources'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for IT
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_it',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'IT'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Marketing
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_marketing',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Marketing'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Operations
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_operations',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Operations'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Sales
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id, 'supervisor_sales',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor', d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Sales'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- ========================================
+-- ROLE HIERARCHY & PERMISSIONS REFERENCE
+-- ========================================
+-- 
+-- 1. Admin - Full system access
+--    - Can approve all leaves
+--    - Can manage all employees
+--    - Can assign user roles
+--    - Can view all departments
+--
+-- 2. HR Manager - HR administrative access
+--    - Can approve all leaves
+--    - Can view all employees
+--    - Can manage recruitment
+--    - Cannot assign roles
+--
+-- 3. Supervisor - Department-specific access
+--    - Can ONLY see data from their assigned department
+--    - Can approve leaves for their department ONLY
+--    - Has VIEW-ONLY access to employee data (cannot edit)
+--    - managed_department_id determines scope
+--
+-- 4. Employee - Self-service access only
+--    - Can view own attendance
+--    - Can submit leave requests
+--    - Can respond to event invitations
+--
+-- NOTE: Manager role has been REMOVED and merged into Supervisor
+-- ========================================
 
 -- ========================================
 -- END OF UNIFIED SCHEMA
