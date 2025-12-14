@@ -1425,7 +1425,7 @@
                 </div>
         </div>
 
-                     <a href="#loans">Loans</a>
+                     <a href="../../LoanSubsystem/index.php">Loans</a>
                      <a href="about.php">About Us</a>
         </div>
 
@@ -1521,7 +1521,7 @@
         <h2>LOAN SERVICES<br>WE OFFER</h2>
         
         <div class="loans-grid">
-            <div class="loan-card">
+            <a href="../../LoanSubsystem/Loan_AppForm.php?loanType=Personal%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image">
                     <img src="images/personalloan.png" alt="Personal Loan">
                 </div>
@@ -1529,9 +1529,9 @@
                     <h3>Personal Loan</h3>
                     <p>Stop worrying and bring your<br> plans to life.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="../../LoanSubsystem/Loan_AppForm.php?loanType=Car%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image2">
                     <img src="images/autoloan.png" alt="Auto Loan">
                 </div>
@@ -1539,9 +1539,9 @@
                     <h3>Auto Loan</h3>
                     <p>Drive your new car with low rates and fast approval.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="../../LoanSubsystem/Loan_AppForm.php?loanType=Home%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image3">
                     <img src="images/homeloan.png" alt="Home Loan">
                 </div>
@@ -1549,9 +1549,9 @@
                     <h3>Home Loan</h3>
                     <p>Take the next step to your new home property to fund your various needs.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="../../LoanSubsystem/Loan_AppForm.php?loanType=Multi-Purpose%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image4">
                     <img src="images/multipurposeloan.png" alt="Multipurpose Loan">
                 </div>
@@ -1559,7 +1559,7 @@
                     <h3>Multipurpose Loan</h3>
                     <p>Carry on with your plans. Use your property to fund your various needs.</p>
                 </div>
-            </div>
+            </a>
         </div>
     </section>
 

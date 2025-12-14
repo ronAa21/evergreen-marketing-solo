@@ -313,11 +313,10 @@ nav {
     </div>
 
     <div class="nav-links">
-        <a href="/Evergreen/bank-system/evergreen-marketing/viewing.php">Home</a>
+        <a href="../bank-system/evergreen-marketing/viewingpage.php">Home</a>
         <a href="#loan-services">Loan Services</a>
         <a href="#loan-dashboard">Dashboard</a>
-        <a href="/Evergreen/bank-system/Basic-operation/operations/public/customer/account">Profile</a>
-        <!--<a href="../../bank-system/evergreen-marketing/viewingpage.php">Banking</a>-->
+        <a href="../bank-system/Basic-operation/operations/public/customer/account">Profile</a>
     </div>
 
     <div class="profile-actions">
