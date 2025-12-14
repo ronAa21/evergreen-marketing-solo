@@ -1144,10 +1144,29 @@
             return;
         }
         
-        if (!confirm('Are you sure you want to delete this loan application? This action cannot be undone.')) {
-            return;
-        }
-
+        // Show custom confirmation modal
+        const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        const modalBody = document.getElementById('deleteConfirmBody');
+        
+        // Update modal message
+        modalBody.innerHTML = '<p>Are you sure you want to delete this loan application?</p>';
+        
+        // Remove any existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Add click handler for this specific deletion
+        newConfirmBtn.addEventListener('click', function() {
+            modal.hide();
+            performDeleteApplication(applicationId);
+        });
+        
+        modal.show();
+    };
+    
+    // Actual delete application function
+    function performDeleteApplication(applicationId) {
         showLoading('Deleting application...');
 
         fetch('api/loan-data.php', {
@@ -1205,10 +1224,29 @@
             return;
         }
         
-        if (!confirm('Are you sure you want to delete this loan? It will be moved to the bin station where you can restore it later.')) {
-            return;
-        }
-
+        // Show custom confirmation modal
+        const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        const modalBody = document.getElementById('deleteConfirmBody');
+        
+        // Update modal message
+        modalBody.innerHTML = '<p>Are you sure you want to delete this loan?</p><p class="text-muted small">It will be moved to the bin station where you can restore it later.</p>';
+        
+        // Remove any existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Add click handler for this specific deletion
+        newConfirmBtn.addEventListener('click', function() {
+            modal.hide();
+            performDeleteLoan(loanId);
+        });
+        
+        modal.show();
+    };
+    
+    // Actual delete loan function
+    function performDeleteLoan(loanId) {
         // Show loading
         showLoading('Moving loan to bin...');
 

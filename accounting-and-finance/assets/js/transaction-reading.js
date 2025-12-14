@@ -560,10 +560,25 @@
             return;
         }
         
-        if (!confirm('Are you sure you want to delete this transaction? It will be moved to the bin station where you can restore it later.')) {
-            return;
-        }
-
+        // Show custom confirmation modal instead of browser confirm
+        const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        
+        // Remove any existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Add click handler for this specific deletion
+        newConfirmBtn.addEventListener('click', function() {
+            modal.hide();
+            performDeleteTransaction(transactionId);
+        });
+        
+        modal.show();
+    };
+    
+    // Actual delete function
+    function performDeleteTransaction(transactionId) {
         // Show loading
         showLoading('Moving transaction to bin...');
 

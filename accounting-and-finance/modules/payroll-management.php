@@ -1496,14 +1496,6 @@ if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['at
                                                 <td><?php echo htmlspecialchars($current_employee['contract_benefits']); ?></td>
                                             </tr>
                                             <?php endif; ?>
-                                            <tr>
-                                                <td>Bank Name</td>
-                                                <td><?php echo htmlspecialchars($company_bank['bank_name'] ?? 'N/A'); ?></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Bank Account Number</td>
-                                                <td><?php echo htmlspecialchars($company_bank['account_number'] ?? 'N/A'); ?></td>
-                                            </tr>
                                         </table>
                                     </div>
                                 </div>
