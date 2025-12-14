@@ -17,6 +17,97 @@
 USE BankingDB;
 
 -- ========================================
+-- 0. DATABASE SCHEMA FIXES (if needed)
+-- ========================================
+-- Add missing columns to account_applications if they don't exist
+-- This ensures compatibility with older database versions
+
+-- Add middle_name column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'middle_name');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN middle_name VARCHAR(100) DEFAULT NULL AFTER first_name', 'SELECT "middle_name exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add place_of_birth column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'place_of_birth');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN place_of_birth VARCHAR(150) DEFAULT NULL AFTER date_of_birth', 'SELECT "place_of_birth exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add gender column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'gender');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN gender VARCHAR(20) DEFAULT NULL AFTER place_of_birth', 'SELECT "gender exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add civil_status column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'civil_status');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN civil_status VARCHAR(20) DEFAULT NULL AFTER gender', 'SELECT "civil_status exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add nationality column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'nationality');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN nationality VARCHAR(50) DEFAULT NULL AFTER civil_status', 'SELECT "nationality exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add barangay_id column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'barangay_id');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN barangay_id INT(11) DEFAULT NULL AFTER street_address', 'SELECT "barangay_id exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add city_id column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'city_id');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN city_id INT(11) DEFAULT NULL AFTER barangay_id', 'SELECT "city_id exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add province_id column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'province_id');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN province_id INT(11) DEFAULT NULL AFTER city_id', 'SELECT "province_id exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add postal_code column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'postal_code');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN postal_code VARCHAR(20) DEFAULT NULL AFTER province_id', 'SELECT "postal_code exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add occupation column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'occupation');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN occupation VARCHAR(100) DEFAULT NULL AFTER employer_name', 'SELECT "occupation exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add source_of_funds column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'source_of_funds');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN source_of_funds VARCHAR(100) DEFAULT NULL AFTER annual_income', 'SELECT "source_of_funds exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add reviewed_by_employee_id column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'reviewed_by_employee_id');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN reviewed_by_employee_id INT(11) DEFAULT NULL AFTER reviewed_at', 'SELECT "reviewed_by_employee_id exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add rejection_reason column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'rejection_reason');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN rejection_reason TEXT DEFAULT NULL AFTER reviewed_by_employee_id', 'SELECT "rejection_reason exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add created_by_employee_id column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'created_by_employee_id');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN created_by_employee_id INT(11) DEFAULT NULL AFTER rejection_reason', 'SELECT "created_by_employee_id exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add id_front_image column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'id_front_image');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN id_front_image VARCHAR(255) DEFAULT NULL AFTER created_by_employee_id', 'SELECT "id_front_image exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add id_back_image column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'id_back_image');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN id_back_image VARCHAR(255) DEFAULT NULL AFTER id_front_image', 'SELECT "id_back_image exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add id_uploaded_at column
+SET @column_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'BankingDB' AND TABLE_NAME = 'account_applications' AND COLUMN_NAME = 'id_uploaded_at');
+SET @sql = IF(@column_exists = 0, 'ALTER TABLE account_applications ADD COLUMN id_uploaded_at DATETIME DEFAULT NULL AFTER id_back_image', 'SELECT "id_uploaded_at exists" AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ========================================
 -- 1. ADMIN USER & ROLES
 -- ========================================
 
@@ -1455,7 +1546,17 @@ INSERT INTO bank_employees (employee_id, username, password_hash, email, first_n
 (2, 'teller1', '$2y$10$kCoxX3xFyKc0QPuoiUdqVeDshsMP54kAS5DPoP6YLqFbozEkjh89W', 'teller1@evergreenbank.com', 'John', 'Doe', 'teller', 1, 'Bank Teller 002', '2025-11-01 19:46:01', '2025-11-29 02:14:45'),
 (3, NULL, NULL, NULL, NULL, NULL, 'teller', 1, 'Account Manager 001', '2025-11-06 19:46:01', '2025-11-29 01:44:08'),
 (4, NULL, NULL, NULL, NULL, NULL, 'teller', 1, 'Bank Officer 001', '2025-11-11 19:46:01', '2025-11-29 01:44:08'),
-(7, 'testuser', '$2y$10$kCoxX3xFyKc0QPuoiUdqVeDshsMP54kAS5DPoP6YLqFbozEkjh89W', 'testuser@evergreenbank.com', 'Test', 'User', 'teller', 1, '', '2025-11-29 02:13:04', '2025-11-29 02:15:14');
+(7, 'testuser', '$2y$10$kCoxX3xFyKc0QPuoiUdqVeDshsMP54kAS5DPoP6YLqFbozEkjh89W', 'testuser@evergreenbank.com', 'Test', 'User', 'teller', 1, '', '2025-11-29 02:13:04', '2025-11-29 02:15:14')
+ON DUPLICATE KEY UPDATE 
+    username = VALUES(username),
+    password_hash = VALUES(password_hash),
+    email = VALUES(email),
+    first_name = VALUES(first_name),
+    last_name = VALUES(last_name),
+    role = VALUES(role),
+    is_active = VALUES(is_active),
+    employee_name = VALUES(employee_name),
+    updated_at = VALUES(updated_at);
 
 -- Bank Customers
 INSERT INTO bank_customers (customer_id, last_name, first_name, middle_name, email, password_hash, created_at, created_by_employee_id) VALUES
@@ -1566,7 +1667,8 @@ INSERT INTO employment_statuses (status_name, description) VALUES
 ('Unemployed', 'Currently not employed'),
 ('Retired', 'No longer in active employment due to retirement'),
 ('Student', 'Currently pursuing education'),
-('Homemaker', 'Managing household responsibilities');
+('Homemaker', 'Managing household responsibilities')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
 
 -- Insert default source of funds
 INSERT INTO source_of_funds (source_name, description, requires_proof) VALUES
@@ -1578,7 +1680,8 @@ INSERT INTO source_of_funds (source_name, description, requires_proof) VALUES
 ('Gift', 'Monetary gifts from family or friends', 1),
 ('Pension', 'Retirement pension or benefits', 1),
 ('Remittance', 'Money sent from abroad by family members', 0),
-('Other', 'Other legitimate sources of funds', 1);
+('Other', 'Other legitimate sources of funds', 1)
+ON DUPLICATE KEY UPDATE description = VALUES(description), requires_proof = VALUES(requires_proof);
 
 -- Bank Transactions
 INSERT INTO bank_transactions (transaction_id, transaction_ref, account_id, transaction_type_id, amount, related_account_id, description, employee_id, created_at) VALUES
@@ -1618,37 +1721,38 @@ ON DUPLICATE KEY UPDATE attendance_summary = VALUES(attendance_summary);
 -- 4G. BANKING MODULE - MISSIONS & BANK USERS
 -- ========================================
 
-INSERT INTO `account_applications` (`application_id`, `application_number`, `application_status`, `first_name`, `last_name`, `email`, `phone_number`, `date_of_birth`, `street_address`, `barangay`, `city`, `state`, `zip_code`, `ssn`, `id_type`, `id_number`, `employment_status`, `employer_name`, `job_title`, `annual_income`, `account_type`, `selected_cards`, `additional_services`, `terms_accepted`, `privacy_acknowledged`, `marketing_consent`, `submitted_at`, `reviewed_at`) VALUES
-(1, 'APP-2025-00001', 'pending', 'John', 'Doe', 'john.doe@example.com', '(555) 123-4567', '1990-01-15', '123 Main Street', '', 'New York', 'NY', '10001', '123-45-6789', 'Driver\'s License', 'DL123456', 'Employed', 'Tech Corp', 'Software Engineer', 75000.00, 'acct-both', NULL, 'debit,online,mobile', 1, 1, 0, '2025-11-25 01:23:11', NULL),
-(2, 'APP-2025-00002', 'pending', 'Johsua', 'Nambio', 'nambio.johsua.agustin@gmail.com', '09611021573', '2005-10-10', '#66 Pasong Tamo QC', '', 'Metro Manila', 'asdasd', '123123', '123-45-1234', 'Driver\\\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'acct-checking', NULL, 'online', 1, 1, 1, '2025-11-25 01:24:21', NULL),
-(3, 'APP-2025-00003', 'pending', 'Johsua', 'Nambio', 'karmaajoshh@gmail.com', '09611021573', '2004-10-01', '#66 Pasong Tamo', '', 'Quezon City', 'Metro Manila', '1107', '123-23-2234', 'Driver\\\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'acct-both', 'prepaid', 'mobile', 1, 1, 1, '2025-11-25 01:32:46', NULL),
-(4, 'APP-2025-00004', 'pending', 'Johsua', 'Nambio', 'karmaajoshh@gmail.com', '09611021573', '2000-10-10', '66 Durian Street', 'Tandang Sora', 'Quezon City', 'Metro Manila', '1116', '123-23-2343', 'Driver\\\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'acct-both', 'credit', 'online', 1, 1, 1, '2025-11-25 01:45:01', NULL),
-(5, 'APP-2025-00005', 'pending', 'Johsua', 'Nambio', 'nambio.johsua.agustin@gmail.com', '09611021573', '2004-10-10', '#66 Pasong Tamo QC', 'Paco', 'Manila', 'Metro Manila', '1007', '123-45-1234', 'Driver\\\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'acct-both', 'prepaid', 'mobile', 1, 1, 1, '2025-11-25 16:28:05', NULL)
+INSERT INTO `account_applications` (`application_id`, `application_number`, `application_status`, `first_name`, `middle_name`, `last_name`, `email`, `phone_number`, `date_of_birth`, `gender`, `civil_status`, `nationality`, `street_address`, `barangay_id`, `city_id`, `province_id`, `postal_code`, `id_type`, `id_number`, `employment_status`, `employer_name`, `occupation`, `annual_income`, `source_of_funds`, `account_type`, `terms_accepted`, `privacy_acknowledged`, `submitted_at`, `reviewed_at`) VALUES
+(1, 'APP-2025-00001', 'pending', 'John', NULL, 'Doe', 'john.doe@example.com', '(555) 123-4567', '1990-01-15', 'Male', 'Single', 'American', '123 Main Street', NULL, NULL, NULL, '10001', 'Driver\'s License', 'DL123456', 'Employed', 'Tech Corp', 'Software Engineer', 75000.00, 'Employment', 'Savings Account', 1, 1, '2025-11-25 01:23:11', NULL),
+(2, 'APP-2025-00002', 'pending', 'Johsua', NULL, 'Nambio', 'nambio.johsua.agustin@gmail.com', '09611021573', '2005-10-10', 'Male', 'Single', 'Filipino', '#66 Pasong Tamo QC', NULL, NULL, NULL, '123123', 'Driver\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'Employment', 'Checking Account', 1, 1, '2025-11-25 01:24:21', NULL),
+(3, 'APP-2025-00003', 'pending', 'Johsua', NULL, 'Nambio', 'karmaajoshh@gmail.com', '09611021573', '2004-10-01', 'Male', 'Single', 'Filipino', '#66 Pasong Tamo', NULL, NULL, NULL, '1107', 'Driver\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'Employment', 'Savings Account', 1, 1, '2025-11-25 01:32:46', NULL),
+(4, 'APP-2025-00004', 'pending', 'Johsua', NULL, 'Nambio', 'karmaajoshh@gmail.com', '09611021573', '2000-10-10', 'Male', 'Single', 'Filipino', '66 Durian Street', NULL, NULL, NULL, '1116', 'Driver\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'Employment', 'Savings Account', 1, 1, '2025-11-25 01:45:01', NULL),
+(5, 'APP-2025-00005', 'pending', 'Johsua', NULL, 'Nambio', 'nambio.johsua.agustin@gmail.com', '09611021573', '2004-10-10', 'Male', 'Single', 'Filipino', '#66 Pasong Tamo QC', NULL, NULL, NULL, '1007', 'Driver\'s License', '123123', 'Employed', 'Charles', 'Cashier', 10000.00, 'Employment', 'Savings Account', 1, 1, '2025-11-25 16:28:05', NULL)
 ON DUPLICATE KEY UPDATE 
     application_status = VALUES(application_status),
     first_name = VALUES(first_name),
+    middle_name = VALUES(middle_name),
     last_name = VALUES(last_name),
     email = VALUES(email),
     phone_number = VALUES(phone_number),
     date_of_birth = VALUES(date_of_birth),
+    gender = VALUES(gender),
+    civil_status = VALUES(civil_status),
+    nationality = VALUES(nationality),
     street_address = VALUES(street_address),
-    barangay = VALUES(barangay),
-    city = VALUES(city),
-    state = VALUES(state),
-    zip_code = VALUES(zip_code),
-    ssn = VALUES(ssn),
+    barangay_id = VALUES(barangay_id),
+    city_id = VALUES(city_id),
+    province_id = VALUES(province_id),
+    postal_code = VALUES(postal_code),
     id_type = VALUES(id_type),
     id_number = VALUES(id_number),
     employment_status = VALUES(employment_status),
     employer_name = VALUES(employer_name),
-    job_title = VALUES(job_title),
+    occupation = VALUES(occupation),
     annual_income = VALUES(annual_income),
+    source_of_funds = VALUES(source_of_funds),
     account_type = VALUES(account_type),
-    selected_cards = VALUES(selected_cards),
-    additional_services = VALUES(additional_services),
     terms_accepted = VALUES(terms_accepted),
     privacy_acknowledged = VALUES(privacy_acknowledged),
-    marketing_consent = VALUES(marketing_consent),
     submitted_at = VALUES(submitted_at),
     reviewed_at = VALUES(reviewed_at);
 
@@ -2391,19 +2495,19 @@ INSERT INTO `loan_application_types` (`id`, `name`) VALUES
 (4, 'Multi-Purpose Loan'),
 (1, 'Personal Loan');
 
-INSERT INTO `loan_valid_id` (`id`, `loan_valid_id_type`, `valid_id_type`) VALUES
-(1, 1, 'Driver\'s License'),
-(2, 2, 'Postal Id'),
-(3, 3, 'GSIS'),
-(4, 4, 'NBI Clearance'),
-(5, 5, 'Passport'),
-(6, 6, 'National Id'),
-(7, 7, 'UMId'),
-(8, 8, 'Voter\'s ID'),
-(9, 9, 'PRC ID'),
-(10, 10, 'Postal ID'),
-(11, 11, 'PhilHealth ID'),
-(12, 12, 'Seniror Citizen ID');
+INSERT INTO `loan_valid_id` (`id`, `valid_id_type`) VALUES
+(1, 'Driver\'s License'),
+(2, 'Postal Id'),
+(3, 'GSIS'),
+(4, 'NBI Clearance'),
+(5, 'Passport'),
+(6, 'National Id'),
+(7, 'UMId'),
+(8, 'Voter\'s ID'),
+(9, 'PRC ID'),
+(10, 'Postal ID'),
+(11, 'PhilHealth ID'),
+(12, 'Senior Citizen ID');
 -- ========================================
 -- 11. LOAN PAYMENTS DATA
 -- ========================================

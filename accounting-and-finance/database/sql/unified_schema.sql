@@ -479,22 +479,6 @@ CREATE TABLE bank_account_types (
     description VARCHAR(255) DEFAULT NULL
 );
 
-CREATE TABLE account_status_history (
-  status_history_id int(11) NOT NULL AUTO_INCREMENT,
-  account_id int(11) NOT NULL,
-  previous_status enum('active','below_maintaining','flagged_for_removal','closed') DEFAULT NULL,
-  new_status enum('active','below_maintaining','flagged_for_removal','closed') NOT NULL,
-  balance_at_change decimal(10,2) NOT NULL,
-  reason varchar(255) DEFAULT NULL,
-  changed_by int(11) DEFAULT NULL COMMENT 'Employee ID who triggered the change, NULL for system',
-  created_at timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (status_history_id),
-  KEY changed_by (changed_by),
-  KEY idx_account_status (account_id,`created_at`),
-  CONSTRAINT account_status_history_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
-  CONSTRAINT account_status_history_ibfk_2 FOREIGN KEY (changed_by) REFERENCES bank_employees (employee_id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE application_documents (
   document_id int(11) NOT NULL AUTO_INCREMENT,
   application_id int(11) NOT NULL,
@@ -508,23 +492,6 @@ CREATE TABLE application_documents (
   KEY idx_application_id (application_id),
   KEY idx_document_type (document_type),
   CONSTRAINT application_documents_ibfk_1 FOREIGN KEY (application_id) REFERENCES account_applications (application_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE service_fee_charges (
-  fee_id int(11) NOT NULL AUTO_INCREMENT,
-  account_id int(11) NOT NULL,
-  transaction_id int(11) DEFAULT NULL,
-  fee_amount decimal(10,2) NOT NULL,
-  balance_before decimal(10,2) NOT NULL,
-  balance_after decimal(10,2) NOT NULL,
-  charge_date date NOT NULL,
-  fee_type enum('monthly_service_fee','below_maintaining_fee') DEFAULT 'monthly_service_fee',
-  created_at timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (fee_id),
-  KEY transaction_id (transaction_id),
-  KEY idx_account_date (account_id,`charge_date`),
-  CONSTRAINT service_fee_charges_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
-  CONSTRAINT service_fee_charges_ibfk_2 FOREIGN KEY (transaction_id) REFERENCES bank_transactions (transaction_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -686,6 +653,39 @@ CREATE TABLE bank_transactions (
     FOREIGN KEY (transaction_type_id) REFERENCES transaction_types(transaction_type_id),
     FOREIGN KEY (employee_id) REFERENCES bank_employees(employee_id)
 );
+
+CREATE TABLE account_status_history (
+  status_history_id int(11) NOT NULL AUTO_INCREMENT,
+  account_id int(11) NOT NULL,
+  previous_status enum('active','below_maintaining','flagged_for_removal','closed') DEFAULT NULL,
+  new_status enum('active','below_maintaining','flagged_for_removal','closed') NOT NULL,
+  balance_at_change decimal(10,2) NOT NULL,
+  reason varchar(255) DEFAULT NULL,
+  changed_by int(11) DEFAULT NULL COMMENT 'Employee ID who triggered the change, NULL for system',
+  created_at timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (status_history_id),
+  KEY changed_by (changed_by),
+  KEY idx_account_status (account_id,`created_at`),
+  CONSTRAINT account_status_history_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
+  CONSTRAINT account_status_history_ibfk_2 FOREIGN KEY (changed_by) REFERENCES bank_employees (employee_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE service_fee_charges (
+  fee_id int(11) NOT NULL AUTO_INCREMENT,
+  account_id int(11) NOT NULL,
+  transaction_id int(11) DEFAULT NULL,
+  fee_amount decimal(10,2) NOT NULL,
+  balance_before decimal(10,2) NOT NULL,
+  balance_after decimal(10,2) NOT NULL,
+  charge_date date NOT NULL,
+  fee_type enum('monthly_service_fee','below_maintaining_fee') DEFAULT 'monthly_service_fee',
+  created_at timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (fee_id),
+  KEY transaction_id (transaction_id),
+  KEY idx_account_date (account_id,`charge_date`),
+  CONSTRAINT service_fee_charges_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
+  CONSTRAINT service_fee_charges_ibfk_2 FOREIGN KEY (transaction_id) REFERENCES bank_transactions (transaction_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
 -- ACCOUNTING MODULE
