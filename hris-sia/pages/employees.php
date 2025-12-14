@@ -241,6 +241,13 @@ $search = $_GET['search'] ?? '';
 $position_filter = $_GET['position'] ?? '';
 $department_filter = $_GET['department'] ?? '';
 
+// Supervisor department filtering
+$supervisorDeptId = null;
+$isViewOnly = supervisorViewOnly();
+if (isSupervisor() && !isAdmin() && !isHRManager()) {
+    $supervisorDeptId = getUserDepartmentId($conn);
+}
+
 $sql = "SELECT e.*, 
         d.department_name, 
         p.position_title,
@@ -253,6 +260,12 @@ $sql = "SELECT e.*,
         WHERE e.employment_status = ?";
 
 $params = [$view === 'archived' ? 'Inactive' : 'Active'];
+
+// Apply supervisor department filter
+if ($supervisorDeptId) {
+    $sql .= " AND e.department_id = ?";
+    $params[] = $supervisorDeptId;
+}
 
 if ($search) {
     $sql .= " AND (e.first_name LIKE ? OR e.last_name LIKE ? OR e.email LIKE ?)";
@@ -561,6 +574,12 @@ $positions = fetchAll($conn, "SELECT * FROM position ORDER BY position_title");
                                         <td class="px-3 py-2">
                                             <div class="flex gap-2">
                                                 <?php if ($view === 'active'): ?>
+                                                    <?php if ($isViewOnly): ?>
+                                                    <button onclick='viewEmployee(<?php echo json_encode($emp); ?>)'
+                                                        class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:shadow-md transition-all duration-200">
+                                                        <i class="fas fa-eye mr-1"></i>View
+                                                    </button>
+                                                    <?php endif; ?>
                                                     <?php if (isAdmin()): ?>
                                                     <button onclick='editEmployee(<?php echo json_encode($emp); ?>)'
                                                         class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:shadow-md transition-all duration-200">
@@ -979,6 +998,27 @@ $positions = fetchAll($conn, "SELECT * FROM position ORDER BY position_title");
             calculateRates(); // Calculate daily and hourly rates
             
             document.getElementById('employeeModal').classList.remove('hidden');
+        }
+
+        // View-only function for supervisors
+        function viewEmployee(emp) {
+            const details = `
+Employee Details (View Only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ID: EMP-${String(emp.employee_id).padStart(4, '0')}
+Name: ${emp.first_name || ''} ${emp.middle_name || ''} ${emp.last_name || ''}
+Gender: ${emp.gender || 'N/A'}
+Birth Date: ${emp.birth_date || 'N/A'}
+Contact: ${emp.contact_number || 'N/A'}
+Email: ${emp.email || 'N/A'}
+Department: ${emp.department_name || 'N/A'}
+Position: ${emp.position_title || 'N/A'}
+Hire Date: ${emp.hire_date || 'N/A'}
+Address: ${emp.address || 'N/A'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Note: You have VIEW-ONLY access as a Supervisor.
+            `.trim();
+            alert(details);
         }
 
         function closeModal() {

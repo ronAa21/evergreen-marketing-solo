@@ -314,16 +314,16 @@ function isHRManager() {
 
 /**
  * Check if current user is a Manager
- * Managers can approve leave requests for employees in their department
- * @return bool
+ * @deprecated Manager role removed - use isSupervisor() instead
+ * @return bool Always returns false
  */
 function isManager() {
-    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'Manager';
+    return false; // Manager role deprecated - all permissions moved to Supervisor
 }
 
 /**
  * Check if current user is a Supervisor
- * Supervisors have limited oversight of their team
+ * Supervisors can approve leave requests for employees in their department
  * @return bool
  */
 function isSupervisor() {
@@ -331,11 +331,11 @@ function isSupervisor() {
 }
 
 /**
- * Check if current user has any management role (Admin, HR Manager, Manager, or Supervisor)
+ * Check if current user has any management role (Admin, HR Manager, or Supervisor)
  * @return bool
  */
 function hasManagementRole() {
-    return isAdmin() || isHRManager() || isManager() || isSupervisor();
+    return isAdmin() || isHRManager() || isSupervisor();
 }
 
 /**
@@ -387,8 +387,7 @@ function getUserDepartmentId($conn) {
 /**
  * Check if the current user can approve leaves for a specific employee
  * - Admins and HR Managers can approve all leaves
- * - Managers can approve leaves for employees in their department
- * - Supervisors cannot approve leaves (view only)
+ * - Supervisors can approve leaves for employees in their department
  * @param PDO $conn Database connection
  * @param int $employee_id The employee ID whose leave is being approved
  * @return bool
@@ -399,8 +398,8 @@ function canApproveLeavesForEmployee($conn, $employee_id) {
         return true;
     }
     
-    // Managers can approve leaves for their department
-    if (isManager()) {
+    // Supervisors can approve leaves for their department
+    if (isSupervisor()) {
         $userDeptId = getUserDepartmentId($conn);
         if ($userDeptId) {
             try {
@@ -428,10 +427,10 @@ function requireAdmin() {
 }
 
 /**
- * Require Manager or higher role
+ * Require Supervisor or higher role
  */
 function requireManager() {
-    if (!isAdmin() && !isHRManager() && !isManager()) {
+    if (!isAdmin() && !isHRManager() && !isSupervisor()) {
         header('Location: dashboard.php');
         exit;
     }
@@ -446,9 +445,9 @@ function canManageEmployees() {
 }
 
 function canManageLeaves() {
-    // Admins, HR Managers, and Managers can manage leaves
-    // (Managers only for their department - enforced separately)
-    return isAdmin() || isHRManager() || isManager();
+    // Admins, HR Managers, and Supervisors can manage leaves
+    // (Supervisors only for their department - enforced separately)
+    return isAdmin() || isHRManager() || isSupervisor();
 }
 
 function canManageRecruitment() {
@@ -457,6 +456,33 @@ function canManageRecruitment() {
 
 function canViewLogs() {
     return isAdmin();
+}
+
+/**
+ * Check if current user can VIEW employee data (includes supervisors with read-only)
+ * Supervisors can view their department's employee data but not edit
+ * @return bool
+ */
+function canViewEmployeeData() {
+    return isAdmin() || isHRManager() || isSupervisor();
+}
+
+/**
+ * Check if current user can EDIT employee data (supervisors CANNOT edit)
+ * Only Admins and HR Managers can edit employee records
+ * @return bool
+ */
+function canEditEmployeeData() {
+    return isAdmin() || isHRManager();
+}
+
+/**
+ * Check if current user is supervisor with VIEW-ONLY access
+ * Use this to disable edit buttons/forms for supervisors
+ * @return bool
+ */
+function supervisorViewOnly() {
+    return isSupervisor() && !isAdmin() && !isHRManager();
 }
 
 /**

@@ -8,6 +8,13 @@ if (!isset($_SESSION['user_id'])) {
 require_once '../config/database.php';
 require_once '../includes/auth.php';
 
+// Department filtering for supervisors AND regular employees
+// Admin and HR Manager can see all events
+$userDeptId = null;
+if (!isAdmin() && !isHRManager()) {
+    $userDeptId = getUserDepartmentId($conn);
+}
+
 $message = '';
 $messageType = '';
 
@@ -19,12 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // Managers and Admins can add events
                 requireManager();
                 try {
-                    // For Managers, auto-set department to their managed department
+                    // For Supervisors, auto-set department to their managed department
                     $department_id = $_POST['department_id'] ?: null;
-                    if (isManager() && !isAdmin() && !isHRManager()) {
+                    if (isSupervisor() && !isAdmin() && !isHRManager()) {
                         $userDeptId = getUserDepartmentId($conn);
                         if ($userDeptId) {
-                            $department_id = $userDeptId; // Force Manager's department
+                            $department_id = $userDeptId; // Force Supervisor's department
                         }
                     }
                     
@@ -193,17 +200,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Fetch events from database
+// Fetch events from database - filtered by department for supervisors/employees
+$eventsParams = [];
 $eventsSql = "SELECT r.recruitment_id as id, 
               r.job_title as name, 
               r.date_posted as start,
               r.date_posted as end,
               d.department_name
               FROM recruitment r
-              LEFT JOIN department d ON r.department_id = d.department_id
-              ORDER BY r.date_posted DESC";
+              LEFT JOIN department d ON r.department_id = d.department_id";
 
-$eventsData = fetchAll($conn, $eventsSql);
+// Apply department filter for non-admin/HR users
+if ($userDeptId) {
+    $eventsSql .= " WHERE r.department_id = ?";
+    $eventsParams[] = $userDeptId;
+}
+
+$eventsSql .= " ORDER BY r.date_posted DESC";
+$eventsData = fetchAll($conn, $eventsSql, $eventsParams);
 $events = [];
 
 foreach ($eventsData as $event) {
@@ -370,7 +384,7 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
                         <button onclick="nextPeriod()" class="bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200">
                             <i class="fas fa-chevron-right"></i>
                         </button>
-                        <?php if (isAdmin() || isManager()): ?>
+                        <?php if (isAdmin() || isSupervisor()): ?>
                         <button onclick="openAddEventModal()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-200">
                             <i class="fas fa-plus mr-2"></i>Add Event
                         </button>
@@ -556,11 +570,18 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
                     <div class="flex gap-2">
                         <select id="employeeToInvite" multiple class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm" style="min-height: 80px;">
                             <?php
-                            $employees = fetchAll($conn, "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as name, d.department_name 
-                                                          FROM employee e 
-                                                          LEFT JOIN department d ON e.department_id = d.department_id 
-                                                          WHERE e.employment_status = 'Active' 
-                                                          ORDER BY e.first_name");
+                            // Filter employees by supervisor's department
+                            $employeeQuery = "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as name, d.department_name 
+                                              FROM employee e 
+                                              LEFT JOIN department d ON e.department_id = d.department_id 
+                                              WHERE e.employment_status = 'Active'";
+                            $employeeParams = [];
+                            if ($userDeptId) {
+                                $employeeQuery .= " AND e.department_id = ?";
+                                $employeeParams[] = $userDeptId;
+                            }
+                            $employeeQuery .= " ORDER BY e.first_name";
+                            $employees = fetchAll($conn, $employeeQuery, $employeeParams);
                             foreach ($employees as $emp): ?>
                                 <option value="<?php echo $emp['employee_id']; ?>">
                                     <?php echo htmlspecialchars($emp['name']); ?> (<?php echo htmlspecialchars($emp['department_name'] ?? 'No Dept'); ?>)

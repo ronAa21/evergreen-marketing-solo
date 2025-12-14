@@ -249,9 +249,9 @@ $sql = "SELECT lr.*,
 
 $params = [];
 
-// Department-scoped filtering for Managers
-// Managers only see leave requests from their department
-if (isManager() && !isAdmin() && !isHRManager()) {
+// Department-scoped filtering for Supervisors
+// Supervisors only see leave requests from their department
+if (isSupervisor() && !isAdmin() && !isHRManager()) {
     $userDeptId = getUserDepartmentId($conn);
     if ($userDeptId) {
         $sql .= " AND e.department_id = ?";
@@ -305,12 +305,12 @@ try {
     }
 }
 
-// Calculate statistics - department-scoped for Managers
+// Calculate statistics - department-scoped for Supervisors
 try {
     // Build department filter for stats
     $deptFilter = "";
     $deptParams = [];
-    if (isManager() && !isAdmin() && !isHRManager()) {
+    if (isSupervisor() && !isAdmin() && !isHRManager()) {
         $userDeptId = getUserDepartmentId($conn);
         if ($userDeptId) {
             $deptFilter = " AND e.department_id = ?";
