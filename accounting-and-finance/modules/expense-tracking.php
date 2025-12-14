@@ -653,14 +653,11 @@ if ($conn->query("SHOW TABLES LIKE 'expense_categories'")->num_rows > 0) {
                     
                     <div class="results-actions">
                         <?php if (!empty($expenses)): ?>
-                            <button class="btn-export" onclick="exportToExcel()">
-                                <i class="fas fa-file-excel"></i> Export Excel
+                            <button class="btn-export" onclick="exportToPDF()">
+                                <i class="fas fa-file-pdf"></i> Export PDF
                             </button>
                             <button class="btn-print" onclick="printReport()">
                                 <i class="fas fa-print"></i> Print Report
-                            </button>
-                            <button class="btn-audit" onclick="showAuditTrail()">
-                                <i class="fas fa-history"></i> Audit Trail
                             </button>
                         <?php endif; ?>
                     </div>
@@ -772,9 +769,6 @@ if ($conn->query("SHOW TABLES LIKE 'expense_categories'")->num_rows > 0) {
                                                 <button class="btn-view" onclick="viewExpense('<?php echo htmlspecialchars($expenseIdForView, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($transactionType, ENT_QUOTES); ?>')" title="View Details">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                <button class="btn-audit-item" onclick="viewAuditTrail('<?php echo htmlspecialchars($expenseIdForAudit, ENT_QUOTES); ?>')" title="Audit Trail">
-                                                    <i class="fas fa-history"></i>
-                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -800,19 +794,6 @@ if ($conn->query("SHOW TABLES LIKE 'expense_categories'")->num_rows > 0) {
         </div>
     </div>
 
-    <!-- Modal for Audit Trail -->
-    <div id="auditModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Audit Trail</h3>
-                <span class="close" onclick="closeModal()">&times;</span>
-            </div>
-            <div class="modal-body" id="auditModalBody">
-                <!-- Content will be loaded here -->
-            </div>
-        </div>
-    </div>
-    
     <!-- Footer -->
     <footer>
         <div class="container">
@@ -824,6 +805,9 @@ if ($conn->query("SHOW TABLES LIKE 'expense_categories'")->num_rows > 0) {
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <!-- Custom JS -->
     <script src="../assets/js/expense-tracking.js"></script>
     <script src="../assets/js/notifications.js"></script>

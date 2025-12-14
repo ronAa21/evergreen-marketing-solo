@@ -243,9 +243,9 @@ function showAuditTrail() {
         });
 }
 
-// Export to Excel
-function exportToExcel() {
-    showNotification('Exporting expenses to Excel...', 'info');
+// Export to PDF using jsPDF
+function exportToPDF() {
+    showNotification('Generating PDF report...', 'info');
     
     // Get current table data
     const table = document.getElementById('expenseTable');
@@ -260,125 +260,177 @@ function exportToExcel() {
         return;
     }
     
-    // Group expenses by category
-    const expensesByCategory = {};
-    const categoryTotals = {};
+    // Calculate totals and collect data
     let grandTotal = 0;
+    const tableData = [];
     
     rows.forEach(row => {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 8) {
-            // Map actual table columns: 0=Transaction#, 1=Date, 2=Employee, 3=Category, 4=Account, 5=Amount, 6=Status, 7=Description, 8=Actions
             const transactionNo = cells[0].textContent.trim();
             const date = cells[1].textContent.trim();
             const employee = cells[2].textContent.trim();
-            const category = cells[3].textContent.trim();
-            const accountInfo = cells[4].textContent.trim();
+            const category = cells[3].textContent.trim().split('\n')[0];
+            const accountInfo = cells[4].textContent.trim().split('\n')[0];
             const amountText = cells[5].textContent.trim();
             const amount = parseFloat(amountText.replace(/[₱,]/g, '')) || 0;
             const status = cells[6].textContent.trim();
-            const description = cells[7].textContent.trim();
             
-            if (!expensesByCategory[category]) {
-                expensesByCategory[category] = [];
-                categoryTotals[category] = 0;
-            }
-            
-            expensesByCategory[category].push({
-                transactionNo,
-                date,
-                employee,
-                amount,
-                status,
-                description,
-                accountInfo
-            });
-            
-            categoryTotals[category] += amount;
+            tableData.push([transactionNo, date, employee, category, 'P ' + amount.toLocaleString('en-US', {minimumFractionDigits: 2}), status]);
             grandTotal += amount;
         }
     });
     
-    // Create beautifully formatted CSV content for Excel
-    let csvContent = "EVERGREEN ACCOUNTING & FINANCE SYSTEM\n";
-    csvContent += "EXPENSE TRACKING REPORT\n";
-    csvContent += "\n";
-    csvContent += `Report Generated: ${new Date().toLocaleString()}\n`;
-    csvContent += "\n";
-    csvContent += "\n";
-    
-    // Summary section with better formatting
-    csvContent += "EXECUTIVE SUMMARY\n";
-    csvContent += "\n";
-    csvContent += "Metric,Value\n";
-    csvContent += `Total Expenses,${rows.length}\n`;
-    csvContent += `Grand Total (PHP),${grandTotal.toFixed(2)}\n`;
-    csvContent += `Number of Categories,${Object.keys(categoryTotals).length}\n`;
-    csvContent += `Average per Expense (PHP),${rows.length > 0 ? (grandTotal / rows.length).toFixed(2) : '0.00'}\n`;
-    csvContent += "\n";
-    csvContent += "\n";
-    csvContent += "\n";
-    
-    // Summary by Category with better formatting
-    csvContent += "SUMMARY BY CATEGORY\n";
-    csvContent += "\n";
-    csvContent += "Category,Total Amount (PHP),Percentage (%),Number of Expenses\n";
-    
-    Object.keys(categoryTotals).sort().forEach(category => {
-        const total = categoryTotals[category];
-        const percentage = grandTotal > 0 ? ((total / grandTotal) * 100).toFixed(2) : '0.00';
-        const expenseCount = expensesByCategory[category].length;
-        csvContent += `"${category}",${total.toFixed(2)},${percentage}%,${expenseCount}\n`;
-    });
-    
-    csvContent += "\n";
-    csvContent += "\n";
-    csvContent += "\n";
-    
-    // Detailed expenses grouped by category with better formatting
-    Object.keys(expensesByCategory).sort().forEach((category, catIndex) => {
-        if (catIndex > 0) {
-            csvContent += "\n";
-            csvContent += "\n";
-        }
+    try {
+        // Initialize jsPDF (landscape orientation for more space)
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        const pageWidth = 297;
+        const pageHeight = 210;
+        const margin = 10;
+        const contentWidth = pageWidth - (margin * 2);
         
-        csvContent += `"CATEGORY: ${category.toUpperCase()}"\n`;
-        csvContent += "\n";
-        csvContent += "Transaction #,Date,Employee,Description,Account Code & Name,Amount (PHP),Status\n";
+        // Colors
+        const primaryColor = [10, 61, 61]; // #0A3D3D
         
-        expensesByCategory[category].forEach((expense, index) => {
-            csvContent += `"${expense.transactionNo}","${expense.date}","${expense.employee}","${expense.description.replace(/"/g, '""')}","${expense.accountInfo.replace(/"/g, '""')}",${expense.amount.toFixed(2)},"${expense.status}"\n`;
+        // Header - Full width
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, pageWidth, 22, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('EVERGREEN', pageWidth / 2, 9, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Expense Tracking Report', pageWidth / 2, 16, { align: 'center' });
+        
+        // Report date - centered
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(8);
+        doc.text('Generated: ' + new Date().toLocaleString(), pageWidth / 2, 28, { align: 'center' });
+        
+        // Summary boxes - centered and evenly spaced
+        const summaryY = 34;
+        const boxWidth = 70;
+        const boxHeight = 16;
+        const boxGap = 15;
+        const totalBoxesWidth = (boxWidth * 3) + (boxGap * 2);
+        const startX = (pageWidth - totalBoxesWidth) / 2;
+        
+        // Total Records box
+        doc.setFillColor(248, 249, 250);
+        doc.roundedRect(startX, summaryY, boxWidth, boxHeight, 2, 2, 'F');
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(startX, summaryY, boxWidth, boxHeight, 2, 2, 'S');
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(tableData.length.toString(), startX + boxWidth/2, summaryY + 7, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text('Total Records', startX + boxWidth/2, summaryY + 13, { align: 'center' });
+        
+        // Grand Total box
+        const box2X = startX + boxWidth + boxGap;
+        doc.setFillColor(248, 249, 250);
+        doc.roundedRect(box2X, summaryY, boxWidth, boxHeight, 2, 2, 'F');
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(box2X, summaryY, boxWidth, boxHeight, 2, 2, 'S');
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('P ' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2}), box2X + boxWidth/2, summaryY + 7, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text('Grand Total', box2X + boxWidth/2, summaryY + 13, { align: 'center' });
+        
+        // Average box
+        const box3X = box2X + boxWidth + boxGap;
+        const avgAmount = tableData.length > 0 ? grandTotal / tableData.length : 0;
+        doc.setFillColor(248, 249, 250);
+        doc.roundedRect(box3X, summaryY, boxWidth, boxHeight, 2, 2, 'F');
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(box3X, summaryY, boxWidth, boxHeight, 2, 2, 'S');
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('P ' + avgAmount.toLocaleString('en-US', {minimumFractionDigits: 2}), box3X + boxWidth/2, summaryY + 7, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text('Average', box3X + boxWidth/2, summaryY + 13, { align: 'center' });
+        
+        // Calculate column widths to fill full page width (277mm available)
+        const tableWidth = contentWidth; // 277mm
+        
+        // Table - Full width with proper column distribution
+        doc.autoTable({
+            startY: 55,
+            head: [['Transaction #', 'Date', 'Employee', 'Category', 'Amount (PHP)', 'Status']],
+            body: tableData,
+            theme: 'grid',
+            styles: {
+                overflow: 'linebreak',
+                fontSize: 9
+            },
+            headStyles: {
+                fillColor: primaryColor,
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 10,
+                halign: 'center',
+                cellPadding: 4
+            },
+            bodyStyles: {
+                fontSize: 9,
+                textColor: [50, 50, 50],
+                cellPadding: 3
+            },
+            alternateRowStyles: {
+                fillColor: [248, 248, 248]
+            },
+            columnStyles: {
+                0: { cellWidth: 55, halign: 'left' },    // Transaction # (55mm)
+                1: { cellWidth: 32, halign: 'center' },  // Date (32mm)
+                2: { cellWidth: 60, halign: 'left' },    // Employee (60mm)
+                3: { cellWidth: 65, halign: 'left' },    // Category (65mm)
+                4: { cellWidth: 40, halign: 'right', fontStyle: 'bold' }, // Amount (40mm)
+                5: { cellWidth: 25, halign: 'center' }   // Status (25mm)
+            },
+            margin: { left: margin, right: margin },
+            tableWidth: tableWidth,
+            didDrawPage: function(data) {
+                // Footer on each page
+                doc.setFontSize(7);
+                doc.setTextColor(150, 150, 150);
+                doc.text('© ' + new Date().getFullYear() + ' Evergreen Accounting & Finance System', pageWidth / 2, pageHeight - 5, { align: 'center' });
+                doc.text('Page ' + doc.internal.getNumberOfPages(), pageWidth - margin, pageHeight - 5, { align: 'right' });
+            }
         });
         
-        csvContent += "\n";
-        csvContent += `"TOTAL FOR ${category.toUpperCase()}","","","","",${categoryTotals[category].toFixed(2)},""\n`;
-    });
-    
-    csvContent += "\n";
-    csvContent += "\n";
-    csvContent += "\n";
-    
-    // Footer section
-    csvContent += "REPORT INFORMATION\n";
-    csvContent += "\n";
-    csvContent += `"This report was generated by the Evergreen Accounting & Finance System"\n`;
-    csvContent += `"Report Period: All Available Data"\n`;
-    csvContent += `"Total Expenses: ${rows.length} expense(s)"\n`;
-    csvContent += `"Grand Total Amount: PHP ${grandTotal.toFixed(2)}"\n`;
-    csvContent += `"Report Date: ${new Date().toLocaleDateString()}"\n`;
-    
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `expense_report_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    showNotification('Expense report exported successfully!', 'success');
+        // Add total row after table - full width
+        const finalY = doc.lastAutoTable.finalY + 3;
+        doc.setFillColor(230, 230, 230);
+        doc.rect(margin, finalY, contentWidth, 10, 'F');
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('GRAND TOTAL:', pageWidth - margin - 55, finalY + 7);
+        doc.text('PHP ' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2}), pageWidth - margin - 3, finalY + 7, { align: 'right' });
+        
+        // Save the PDF
+        const filename = 'expense_report_' + new Date().toISOString().split('T')[0] + '.pdf';
+        doc.save(filename);
+        
+        showNotification('PDF downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('PDF generation error:', error);
+        showNotification('Error generating PDF: ' + error.message, 'error');
+    }
 }
 
 // Print report
