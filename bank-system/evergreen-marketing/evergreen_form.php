@@ -14,12 +14,33 @@
     // Include database connection
     include("db_connect.php");
 
-    // Fetch user data from database
+    // Fetch user data from database with address from addresses table
     $user_id = $_SESSION['user_id'];
     $userData = [];
+    $userBirthday = '';
+    $userProvince = '';
+    $userCity = '';
+    $userBarangay = '';
+    $userStreetAddress = '';
+    $userZipCode = '';
+    $userProvinceId = 0;
+    $userCityId = 0;
+    $userBarangayId = 0;
     
-    $sql = "SELECT first_name, middle_name, last_name, email, contact_number, birthday, address, city_province 
-            FROM bank_customers WHERE customer_id = ?";
+    // Get customer data
+    $sql = "SELECT bc.first_name, bc.middle_name, bc.last_name, bc.email, bc.contact_number,
+                   cp.date_of_birth,
+                   a.address_line, a.province_id, a.city_id, a.barangay_id, a.postal_code,
+                   p.province_name,
+                   c.city_name,
+                   b.barangay_name
+            FROM bank_customers bc
+            LEFT JOIN customer_profiles cp ON bc.customer_id = cp.customer_id
+            LEFT JOIN addresses a ON bc.customer_id = a.customer_id AND a.is_primary = 1
+            LEFT JOIN provinces p ON a.province_id = p.province_id
+            LEFT JOIN cities c ON a.city_id = c.city_id
+            LEFT JOIN barangays b ON a.barangay_id = b.barangay_id
+            WHERE bc.customer_id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -27,124 +48,37 @@
     
     if ($result && $result->num_rows === 1) {
         $userData = $result->fetch_assoc();
+        
+        // Debug: Log what we got from database
+        error_log("User data fetched for customer_id: " . $user_id);
+        error_log("Province ID: " . ($userData['province_id'] ?? 'NULL'));
+        error_log("City ID: " . ($userData['city_id'] ?? 'NULL'));
+        error_log("Barangay ID: " . ($userData['barangay_id'] ?? 'NULL'));
+        error_log("Address line: " . ($userData['address_line'] ?? 'NULL'));
+        error_log("Postal code from DB: '" . ($userData['postal_code'] ?? 'NULL') . "'");
+        error_log("Full userData: " . print_r($userData, true));
+        
+        // Format birthday for date input (YYYY-MM-DD)
+        if (!empty($userData['date_of_birth'])) {
+            $userBirthday = date('Y-m-d', strtotime($userData['date_of_birth']));
+        }
+        
+        // Get address data
+        $userStreetAddress = $userData['address_line'] ?? '';
+        $userProvince = $userData['province_name'] ?? '';
+        $userCity = $userData['city_name'] ?? '';
+        $userBarangay = $userData['barangay_name'] ?? '';
+        $userZipCode = $userData['postal_code'] ?? '';  // postal_code from addresses table
+        $userProvinceId = $userData['province_id'] ?? 0;
+        $userCityId = $userData['city_id'] ?? 0;
+        $userBarangayId = $userData['barangay_id'] ?? 0;
+        
+        // Debug: Log zip code value
+        error_log("Zip code value set: '" . $userZipCode . "'");
+    } else {
+        error_log("No user data found for customer_id: " . $user_id . " (rows: " . $result->num_rows . ")");
     }
     $stmt->close();
-
-    // Format birthday for date input (YYYY-MM-DD)
-    $userBirthday = '';
-    if (!empty($userData['birthday'])) {
-        $userBirthday = date('Y-m-d', strtotime($userData['birthday']));
-    }
-
-    // Parse city_province to extract city, province, region, and barangay
-    $userCity = '';
-    $userProvince = '';
-    $userRegion = '';
-    $userBarangay = '';
-    if (!empty($userData['city_province'])) {
-        $parts = explode(',', $userData['city_province']);
-        if (count($parts) >= 2) {
-            $userCity = trim($parts[0]);
-            $userProvince = trim($parts[1]);
-        } else {
-            $userCity = trim($userData['city_province']);
-        }
-        
-        // Check if we have additional location parts (Region, Barangay)
-        if (count($parts) >= 3) {
-            $userRegion = trim($parts[2]);
-        }
-        if (count($parts) >= 4) {
-            $userBarangay = trim($parts[3]);
-        }
-        
-        // If region is empty, try to look it up from province/city using the API
-        if (empty($userRegion) && (!empty($userProvince) || !empty($userCity))) {
-            // Metro Manila cities list
-            $metroManilaCities = [
-                'manila', 'quezon city', 'makati', 'makati city', 'pasig', 'pasig city',
-                'taguig', 'taguig city', 'mandaluyong', 'mandaluyong city', 'pasay', 'pasay city',
-                'paranaque', 'parañaque', 'paranaque city', 'parañaque city',
-                'muntinlupa', 'muntinlupa city', 'las pinas', 'las piñas', 'las pinas city', 'las piñas city',
-                'marikina', 'marikina city', 'san juan', 'san juan city',
-                'caloocan', 'caloocan city', 'malabon', 'malabon city',
-                'navotas', 'navotas city', 'valenzuela', 'valenzuela city', 'pateros'
-            ];
-            
-            // Check if it's Metro Manila
-            $isMetroManila = false;
-            $provinceLower = strtolower($userProvince);
-            $cityLower = strtolower($userCity);
-            
-            if ($provinceLower === 'metro manila' || $provinceLower === 'ncr' || 
-                $provinceLower === 'national capital region' ||
-                stripos($userProvince, 'Metro Manila') !== false) {
-                $isMetroManila = true;
-            }
-            
-            // Check if city is in Metro Manila
-            if (!$isMetroManila && $userCity) {
-                foreach ($metroManilaCities as $mmCity) {
-                    if (strpos($cityLower, $mmCity) !== false || strpos($mmCity, $cityLower) !== false) {
-                        $isMetroManila = true;
-                        break;
-                    }
-                }
-            }
-            
-            if ($isMetroManila) {
-                $userRegion = 'National Capital Region (NCR)';
-                if (empty($userProvince) || $userProvince === $userCity) {
-                    $userProvince = 'Metro Manila';
-                }
-            } else {
-                // Try to fetch region from PSGC Cloud API
-                // Build the API URL to find region by province
-                $psgcApiBase = 'https://psgc.cloud/api';
-                
-                // First, try to get all provinces and find the matching one
-                $provincesUrl = $psgcApiBase . '/provinces';
-                $context = stream_context_create([
-                    'http' => [
-                        'method' => 'GET',
-                        'timeout' => 10,
-                        'header' => "Accept: application/json\r\nUser-Agent: EvergreenBankApp/1.0\r\n"
-                    ],
-                    'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]
-                ]);
-                
-                $provincesResponse = @file_get_contents($provincesUrl, false, $context);
-                if ($provincesResponse) {
-                    $provinces = json_decode($provincesResponse, true);
-                    if ($provinces) {
-                        $provinceCode = null;
-                        $provinceLowerSearch = strtolower($userProvince);
-                        
-                        foreach ($provinces as $province) {
-                            if (strcasecmp($province['name'], $userProvince) === 0 ||
-                                stripos($province['name'], $userProvince) !== false ||
-                                stripos($userProvince, $province['name']) !== false) {
-                                $provinceCode = $province['code'];
-                                break;
-                            }
-                        }
-                        
-                        // If we found the province, get its region
-                        if ($provinceCode) {
-                            $provinceDetailUrl = $psgcApiBase . '/provinces/' . $provinceCode;
-                            $provinceDetailResponse = @file_get_contents($provinceDetailUrl, false, $context);
-                            if ($provinceDetailResponse) {
-                                $provinceDetail = json_decode($provinceDetailResponse, true);
-                                if ($provinceDetail && isset($provinceDetail['regionName'])) {
-                                    $userRegion = $provinceDetail['regionName'];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 ?>
 
 <html>
@@ -552,7 +486,7 @@
 
       .account-type-cards {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 12px;
       }
 
@@ -564,14 +498,21 @@
         cursor: pointer;
         text-align: left;
         transition: 0.2s;
+        position: relative;
       }
 
-      .acct-card h4 {
+      .acct-card input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .acct-card .card-content h4 {
         margin: 0 0 6px 0;
         font-size: 14px;
       }
 
-      .acct-card p {
+      .acct-card .card-content p {
         margin: 0;
         font-size: 12px;
         color: #8C8C8C;
@@ -583,6 +524,10 @@
         color: white;
         border-color: #003631;
         transition: 0.2s;
+      }
+      
+      .selected .card-content p {
+        color: #FFFFFF;
       }
 
       .selected h4, .selected p {
@@ -1557,17 +1502,18 @@
 
         .account-type-cards {
           gap: 8px;
+          grid-template-columns: 1fr;
         }
 
         .acct-card {
           padding: 12px;
         }
 
-        .acct-card h4 {
+        .acct-card .card-content h4 {
           font-size: 13px;
         }
 
-        .acct-card p {
+        .acct-card .card-content p {
           font-size: 11px;
         }
 
@@ -1747,11 +1693,11 @@
           padding: 10px;
         }
 
-        .acct-card h4 {
+        .acct-card .card-content h4 {
           font-size: 12px;
         }
 
-        .acct-card p {
+        .acct-card .card-content p {
           font-size: 10px;
         }
 
@@ -1839,11 +1785,11 @@
           font-size: 12px;
         }
 
-        .acct-card h4 {
+        .acct-card .card-content h4 {
           font-size: 11px;
         }
 
-        .acct-card p {
+        .acct-card .card-content p {
           font-size: 9px;
         }
 
@@ -1965,6 +1911,12 @@
 
         <!-- this will be the replaceable panel -->
         <div class="fillup-change">
+          <!-- Hidden fields for customer profile data (set to empty/null if not available) -->
+          <input type="hidden" id="customer-gender" value="">
+          <input type="hidden" id="customer-nationality" value="">
+          <input type="hidden" id="customer-place-of-birth" value="">
+          <input type="hidden" id="customer-civil-status" value="">
+          <input type="hidden" id="customer-source-of-funds" value="">
           
           <!-- Personal info part -->
           <div class="personal-info-panel">
@@ -2000,10 +1952,6 @@
 
             <div class="city-input-wrap">
               <div class="input-wrap">
-                <label for="region">Region<span style="color: red;">*</span></label>
-                <input type="text" class="inp-credentials" id="region" value="<?php echo htmlspecialchars($userRegion); ?>" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
-              </div>
-              <div class="input-wrap">
                 <label for="state">Province<span style="color: red;">*</span></label>
                 <input type="text" class="inp-credentials" id="state" value="<?php echo htmlspecialchars($userProvince); ?>" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
               </div>
@@ -2020,11 +1968,11 @@
             <div class="street-input-wrap">
               <div class="input-wrap">
                 <label for="street-address">Street Address / House No.<span style="color: red;">*</span></label>
-                <input type="text" class="inp-credentials" id="street-address" value="<?php echo htmlspecialchars($userData['address'] ?? ''); ?>" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
+                <input type="text" class="inp-credentials" id="street-address" value="<?php echo htmlspecialchars($userStreetAddress); ?>" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
               </div>
               <div class="input-wrap">
                 <label for="zip-code">Zip Code<span style="color: red;">*</span></label>
-                <input type="text" class="inp-credentials" id="zip-code" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
+                <input type="text" class="inp-credentials" id="zip-code" value="<?php echo htmlspecialchars($userZipCode); ?>" readonly style="background-color: #f0f0f0; cursor: not-allowed;">
               </div>
             </div>
           </div>
@@ -2080,29 +2028,46 @@
   <!-- ID Upload Section -->
   <div class="id-upload-section" style="margin-top: 20px;">
     <div class="input-wrap">
-      <label>Upload ID Photo<span style="color: red;">*</span></label>
-      <div class="upload-container" id="upload-container">
-        <input type="file" id="id-upload" name="id-upload" accept="image/jpeg,image/png,image/jpg,application/pdf" onchange="handleIdUpload(this)" style="position: absolute; opacity: 0; width: 0; height: 0;">
-        <label for="id-upload" class="upload-area" id="upload-area">
+      <label>Upload ID Photo (Front)<span style="color: red;">*</span></label>
+      <div class="upload-container" id="upload-container-front">
+        <input type="file" id="id-upload-front" name="id-upload-front" accept="image/jpeg,image/png,image/jpg" onchange="handleIdUploadFront(this)" style="position: absolute; opacity: 0; width: 0; height: 0;">
+        <label for="id-upload-front" class="upload-area" id="upload-area-front">
           <div class="upload-icon">📄</div>
-          <p class="upload-text">Click or drag to upload your ID</p>
-          <p class="upload-hint">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
+          <p class="upload-text">Click or drag to upload ID front</p>
+          <p class="upload-hint">Accepted formats: JPG, PNG (Max 5MB)</p>
         </label>
-        <div class="upload-preview" id="upload-preview" style="display: none;">
-          <img id="preview-image" src="" alt="ID Preview" style="display: none;">
-          <div class="pdf-placeholder" id="pdf-placeholder" style="display: none; text-align: center; padding: 20px;">
-            <div style="font-size: 50px;">📄</div>
-            <p style="color: #003631; font-weight: 500;">PDF Document</p>
-          </div>
+        <div class="upload-preview" id="upload-preview-front" style="display: none;">
+          <img id="preview-image-front" src="" alt="ID Front Preview">
           <div class="preview-info">
-            <span id="file-name"></span>
-            <button type="button" class="remove-file" id="remove-file" onclick="removeIdFile()">✕ Remove</button>
+            <span id="file-name-front"></span>
+            <button type="button" class="remove-file" onclick="removeIdFileFront()">✕ Remove</button>
           </div>
         </div>
       </div>
       <div class="helper-text" style="margin-top: 8px;">
-        <strong>Important:</strong> Please ensure your ID photo is clear and all information is readable. 
-        The ID number must match the number you entered above.
+        Upload a clear photo of the <strong>front</strong> of your valid ID
+      </div>
+    </div>
+    
+    <div class="input-wrap" style="margin-top: 20px;">
+      <label>Upload ID Photo (Back)<span style="color: red;">*</span></label>
+      <div class="upload-container" id="upload-container-back">
+        <input type="file" id="id-upload-back" name="id-upload-back" accept="image/jpeg,image/png,image/jpg" onchange="handleIdUploadBack(this)" style="position: absolute; opacity: 0; width: 0; height: 0;">
+        <label for="id-upload-back" class="upload-area" id="upload-area-back">
+          <div class="upload-icon">📄</div>
+          <p class="upload-text">Click or drag to upload ID back</p>
+          <p class="upload-hint">Accepted formats: JPG, PNG (Max 5MB)</p>
+        </label>
+        <div class="upload-preview" id="upload-preview-back" style="display: none;">
+          <img id="preview-image-back" src="" alt="ID Back Preview">
+          <div class="preview-info">
+            <span id="file-name-back"></span>
+            <button type="button" class="remove-file" onclick="removeIdFileBack()">✕ Remove</button>
+          </div>
+        </div>
+      </div>
+      <div class="helper-text" style="margin-top: 8px;">
+        Upload a clear photo of the <strong>back</strong> of your valid ID
       </div>
     </div>
   </div>
@@ -2144,18 +2109,20 @@
               <h3 class="section-title">Account Preferences</h3>
 
               <div class="account-type-cards">
-                <div class="acct-card" id="acct-checking">
-                  <h4>Checking</h4>
-                  <p>Everyday banking</p>
-                </div>
-                <div class="acct-card" id="acct-savings">
-                  <h4>Savings</h4>
-                  <p>Earn interest</p>
-                </div>
-                <div class="acct-card" id="acct-both">
-                  <h4>Both</h4>
-                  <p>Complete package</p>
-                </div>
+                <label class="acct-card" for="acct-savings">
+                  <input type="radio" name="account_type" id="acct-savings" value="Savings Account" required>
+                  <div class="card-content">
+                    <h4>Savings Account</h4>
+                    <p>Earn interest on your deposits</p>
+                  </div>
+                </label>
+                <label class="acct-card" for="acct-checking">
+                  <input type="radio" name="account_type" id="acct-checking" value="Checking Account" required>
+                  <div class="card-content">
+                    <h4>Checking Account</h4>
+                    <p>Everyday banking transactions</p>
+                  </div>
+                </label>
               </div>
 
               <div>
@@ -2380,82 +2347,116 @@
     // ========================================
     // GLOBAL ID UPLOAD FUNCTIONS (called by inline handlers)
     // ========================================
-    let uploadedIdFile = null;
+    let uploadedIdFileFront = null;
+    let uploadedIdFileBack = null;
     
-    function handleIdUpload(input) {
-      console.log('handleIdUpload called');
+    function handleIdUploadFront(input) {
+      console.log('handleIdUploadFront called');
       if (input.files && input.files[0]) {
         const file = input.files[0];
         console.log('File:', file.name, file.type, file.size);
         
-        // Validate file type
-        const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-        if (!validTypes.includes(file.type)) {
-          alert('Invalid file type. Please upload JPG, PNG, or PDF files only.');
-          input.value = '';
-          return;
-        }
-        
-        // Validate file size (max 5MB)
+        // Validate file size (5MB max)
         if (file.size > 5 * 1024 * 1024) {
-          alert('File is too large. Maximum size is 5MB.');
+          alert('File size must be less than 5MB');
           input.value = '';
           return;
         }
         
-        uploadedIdFile = file;
-        
-        // Get elements
-        const uploadArea = document.getElementById('upload-area');
-        const uploadPreview = document.getElementById('upload-preview');
-        const previewImage = document.getElementById('preview-image');
-        const pdfPlaceholder = document.getElementById('pdf-placeholder');
-        const fileNameSpan = document.getElementById('file-name');
-        
-        // Update file name
-        if (fileNameSpan) fileNameSpan.textContent = file.name;
-        
-        // Show appropriate preview
-        if (file.type === 'application/pdf') {
-          if (previewImage) previewImage.style.display = 'none';
-          if (pdfPlaceholder) pdfPlaceholder.style.display = 'block';
-        } else {
-          if (pdfPlaceholder) pdfPlaceholder.style.display = 'none';
-          const reader = new FileReader();
-          reader.onload = function(e) {
-            if (previewImage) {
-              previewImage.src = e.target.result;
-              previewImage.style.display = 'block';
-            }
-          };
-          reader.readAsDataURL(file);
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          alert('Please upload an image file (JPG, PNG)');
+          input.value = '';
+          return;
         }
         
-        // Toggle visibility
-        if (uploadArea) uploadArea.style.display = 'none';
-        if (uploadPreview) uploadPreview.style.display = 'block';
+        uploadedIdFileFront = file;
         
-        console.log('Upload complete, preview visible');
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const uploadArea = document.getElementById('upload-area-front');
+          const uploadPreview = document.getElementById('upload-preview-front');
+          const previewImage = document.getElementById('preview-image-front');
+          const fileNameSpan = document.getElementById('file-name-front');
+          
+          previewImage.src = e.target.result;
+          fileNameSpan.textContent = file.name;
+          uploadArea.style.display = 'none';
+          uploadPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
       }
     }
     
-    function removeIdFile() {
-      console.log('removeIdFile called');
-      uploadedIdFile = null;
+    function handleIdUploadBack(input) {
+      console.log('handleIdUploadBack called');
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        console.log('File:', file.name, file.type, file.size);
+        
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+          alert('File size must be less than 5MB');
+          input.value = '';
+          return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          alert('Please upload an image file (JPG, PNG)');
+          input.value = '';
+          return;
+        }
+        
+        uploadedIdFileBack = file;
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const uploadArea = document.getElementById('upload-area-back');
+          const uploadPreview = document.getElementById('upload-preview-back');
+          const previewImage = document.getElementById('preview-image-back');
+          const fileNameSpan = document.getElementById('file-name-back');
+          
+          previewImage.src = e.target.result;
+          fileNameSpan.textContent = file.name;
+          uploadArea.style.display = 'none';
+          uploadPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    
+    function removeIdFileFront() {
+      console.log('removeIdFileFront called');
+      uploadedIdFileFront = null;
       
-      const uploadInput = document.getElementById('id-upload');
-      const uploadArea = document.getElementById('upload-area');
-      const uploadPreview = document.getElementById('upload-preview');
-      const previewImage = document.getElementById('preview-image');
-      const pdfPlaceholder = document.getElementById('pdf-placeholder');
-      const fileNameSpan = document.getElementById('file-name');
+      const uploadInput = document.getElementById('id-upload-front');
+      const uploadArea = document.getElementById('upload-area-front');
+      const uploadPreview = document.getElementById('upload-preview-front');
+      const previewImage = document.getElementById('preview-image-front');
+      const fileNameSpan = document.getElementById('file-name-front');
       
       if (uploadInput) uploadInput.value = '';
-      if (previewImage) {
-        previewImage.src = '';
-        previewImage.style.display = 'none';
-      }
-      if (pdfPlaceholder) pdfPlaceholder.style.display = 'none';
+      if (previewImage) previewImage.src = '';
+      if (fileNameSpan) fileNameSpan.textContent = '';
+      if (uploadPreview) uploadPreview.style.display = 'none';
+      if (uploadArea) uploadArea.style.display = 'block';
+    }
+    
+    function removeIdFileBack() {
+      console.log('removeIdFileBack called');
+      uploadedIdFileBack = null;
+      
+      const uploadInput = document.getElementById('id-upload-back');
+      const uploadArea = document.getElementById('upload-area-back');
+      const uploadPreview = document.getElementById('upload-preview-back');
+      const previewImage = document.getElementById('preview-image-back');
+      const fileNameSpan = document.getElementById('file-name-back');
+      
+      if (uploadInput) uploadInput.value = '';
+      if (previewImage) previewImage.src = '';
       if (fileNameSpan) fileNameSpan.textContent = '';
       if (uploadPreview) uploadPreview.style.display = 'none';
       if (uploadArea) uploadArea.style.display = 'block';
@@ -2541,9 +2542,13 @@
       let valid = true;
       
       // Validate all read-only fields have values (from database)
-      const readOnlyFields = ['f-name','l-name','e-mail','phone-number','date-of-birth','street-address','region','state','city','barangay'];
+      const readOnlyFields = ['f-name','l-name','e-mail','phone-number','date-of-birth','street-address','state','city','barangay','zip-code'];
       readOnlyFields.forEach(id => {
         const el = document.getElementById(id);
+        if (!el) {
+          console.warn('Element not found:', id);
+          return;
+        }
         if (!isNotEmpty(el.value)) {
           showFieldError(el, 'This field is required - please update your profile');
           valid = false;
@@ -2551,15 +2556,6 @@
           clearFieldError(el);
         }
       });
-      
-      // Validate zip code (auto-populated but check it exists)
-      const zipEl = document.getElementById('zip-code');
-      if (!isNotEmpty(zipEl.value)) {
-        showFieldError(zipEl, 'Zip code is required');
-        valid = false;
-      } else {
-        clearFieldError(zipEl);
-      }
 
       // Email validation skipped - already validated during signup and is read-only
       // Age validation skipped - already validated during signup and is read-only
@@ -2598,19 +2594,40 @@
       const errTnc = document.getElementById('error-tnc');
       const errPrivacy = document.getElementById('error-privacy');
 
-      if (!tnc.checked) { errTnc.style.display = 'block'; valid = false; } else { errTnc.style.display = 'none'; }
-      if (!privacy.checked) { errPrivacy.style.display = 'block'; valid = false; } else { errPrivacy.style.display = 'none'; }
+      if (tnc && errTnc) {
+        if (!tnc.checked) { errTnc.style.display = 'block'; valid = false; } else { errTnc.style.display = 'none'; }
+      }
+      if (privacy && errPrivacy) {
+        if (!privacy.checked) { errPrivacy.style.display = 'block'; valid = false; } else { errPrivacy.style.display = 'none'; }
+      }
 
       return valid;
     }
 
-    // account type selection (toggle single selection)
-    document.querySelector('.account-type-cards').addEventListener('click', function(e) {
-      let card = e.target.closest('.acct-card');
-      if (!card) return;
-      document.querySelectorAll('.acct-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      acctType = card.id;
+    // account type selection (radio button - single selection only)
+    document.querySelectorAll('.acct-card').forEach(card => {
+      card.addEventListener('click', function() {
+        // Remove selection from all cards
+        document.querySelectorAll('.acct-card').forEach(c => c.classList.remove('selected'));
+        // Add selection to clicked card
+        this.classList.add('selected');
+        
+        // Check the radio button inside this card
+        const radio = this.querySelector('input[type="radio"]');
+        if (radio) {
+          radio.checked = true;
+          acctType = radio.value; // Get value from radio button
+        }
+      });
+    });
+
+    // Also handle when radio is clicked directly
+    document.querySelectorAll('input[name="account_type"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        document.querySelectorAll('.acct-card').forEach(c => c.classList.remove('selected'));
+        this.closest('.acct-card').classList.add('selected');
+        acctType = this.value;
+      });
     });
 
     // Confetti animation
@@ -2657,6 +2674,13 @@
       if (step === 3) {
         if (!validateReview()) return;
         
+        // Validate account type selection
+        const accountTypeRadio = document.querySelector('input[name="account_type"]:checked');
+        if (!accountTypeRadio) {
+          alert('Please select an account type (Savings or Checking)');
+          return;
+        }
+        
         // Add loading state to button
         nextBtn.classList.add('submitting');
         nextBtn.disabled = true;
@@ -2664,14 +2688,26 @@
         // Simulate processing time
         setTimeout(() => {
           // Gather data - all location fields are now read-only inputs
+          // Get hidden profile data
+          const gender = document.getElementById('customer-gender')?.value || '';
+          const nationality = document.getElementById('customer-nationality')?.value || '';
+          const placeOfBirth = document.getElementById('customer-place-of-birth')?.value || '';
+          const civilStatus = document.getElementById('customer-civil-status')?.value || '';
+          const sourceOfFunds = document.getElementById('customer-source-of-funds')?.value || '';
+          
           let injector = {
             firstName: document.getElementById('f-name').value,
+            middleName: '<?php echo addslashes($userData['middle_name'] ?? ''); ?>',
             lastName: document.getElementById('l-name').value,
             email: document.getElementById('e-mail').value,
             phoneNumber: document.getElementById('phone-number').value,
             dateOfBirth: document.getElementById('date-of-birth').value,
+            gender: gender,
+            nationality: nationality,
+            placeOfBirth: placeOfBirth,
+            civilStatus: civilStatus,
+            sourceOfFunds: sourceOfFunds,
             streetAddress: document.getElementById('street-address').value,
-            region: document.getElementById('region').value,
             barangay: document.getElementById('barangay').value,
             city: document.getElementById('city').value,
             state: document.getElementById('state').value,
@@ -2683,7 +2719,7 @@
             employerName: document.getElementById('employer-name').value,
             jobTitle: document.getElementById('job-title').value,
             annualIncome: document.getElementById('annual-income').value,
-            accountType: acctType,
+            accountType: accountTypeRadio.value,
           };
           infoData = [injector];
           
@@ -2694,7 +2730,6 @@
           displayCred('rev-email', injector.email);
           displayCred('rev-phone', injector.phoneNumber);
           displayCred('rev-street', injector.streetAddress);
-          displayCred('rev-region', injector.region);
           displayCred('rev-state', injector.state);
           displayCred('rev-city', injector.city);
           displayCred('rev-barangay', injector.barangay);
@@ -2705,8 +2740,11 @@
           
           // Update ID upload status in review
           const uploadStatus = document.querySelector('.rev-id-upload');
-          if (uploadStatus && uploadedIdFile) {
-            uploadStatus.textContent = '✓ ' + uploadedIdFile.name;
+          if (uploadStatus && (uploadedIdFileFront || uploadedIdFileBack)) {
+            const files = [];
+            if (uploadedIdFileFront) files.push(uploadedIdFileFront.name);
+            if (uploadedIdFileBack) files.push(uploadedIdFileBack.name);
+            uploadStatus.textContent = '✓ ' + files.join(', ');
             uploadStatus.style.color = '#28a745';
           }
           displayCred('rev-employment-status', injector.employmentStatus);
@@ -2734,12 +2772,17 @@
       
       // Add all application data
       formData.append('firstName', infoData[0].firstName);
+      formData.append('middleName', infoData[0].middleName || '');
       formData.append('lastName', infoData[0].lastName);
       formData.append('email', infoData[0].email);
       formData.append('phoneNumber', infoData[0].phoneNumber);
       formData.append('dateOfBirth', infoData[0].dateOfBirth);
+      formData.append('gender', infoData[0].gender || '');
+      formData.append('nationality', infoData[0].nationality || '');
+      formData.append('placeOfBirth', infoData[0].placeOfBirth || '');
+      formData.append('civilStatus', infoData[0].civilStatus || '');
+      formData.append('sourceOfFunds', infoData[0].sourceOfFunds || '');
       formData.append('streetAddress', infoData[0].streetAddress);
-      formData.append('region', infoData[0].region);
       formData.append('barangay', infoData[0].barangay);
       formData.append('city', infoData[0].city);
       formData.append('state', infoData[0].state);
@@ -2753,24 +2796,23 @@
       formData.append('annualIncome', infoData[0].annualIncome);
       formData.append('accountType', infoData[0].accountType || '');
       
-      // Location names
-      formData.append('regionName', document.getElementById('region').value);
-      formData.append('provinceName', document.getElementById('state').value);
-      formData.append('cityName', document.getElementById('city').value);
-      formData.append('barangayName', document.getElementById('barangay').value);
-      
-      // Selected cards and services
+      // Selected cards and services (optional)
       formData.append('selectedCards', JSON.stringify(getSelectedCards()));
       formData.append('additionalServices', JSON.stringify(getSelectedServices()));
       
       // Terms
-      formData.append('termsAccepted', document.getElementById('term-tnc').checked ? '1' : '0');
-      formData.append('privacyAcknowledged', document.getElementById('term-privacy').checked ? '1' : '0');
-      formData.append('marketingConsent', document.querySelectorAll('.terms-box input[type="checkbox"]')[2].checked ? '1' : '0');
+      const tncCheckbox = document.getElementById('term-tnc');
+      const privacyCheckbox = document.getElementById('term-privacy');
+      formData.append('termsAccepted', tncCheckbox && tncCheckbox.checked ? '1' : '0');
+      formData.append('privacyAcknowledged', privacyCheckbox && privacyCheckbox.checked ? '1' : '0');
+      formData.append('marketingConsent', '0');
       
-      // Add the uploaded ID file
-      if (uploadedIdFile) {
-        formData.append('id_document', uploadedIdFile);
+      // Add the uploaded ID images (front and back separately)
+      if (uploadedIdFileFront) {
+        formData.append('id_front_image', uploadedIdFileFront);
+      }
+      if (uploadedIdFileBack) {
+        formData.append('id_back_image', uploadedIdFileBack);
       }
       
       // Submit to backend with FormData
@@ -2954,36 +2996,9 @@
     // AUTO-POPULATE ZIP CODE ON PAGE LOAD
     // ========================================
     
-    // Load zip code on page load based on stored city
-    document.addEventListener('DOMContentLoaded', function() {
-      loadZipCode();
-    });
-
-    // Fetch zip code based on stored city name
-    function loadZipCode() {
-      const cityName = document.getElementById('city').value;
-      const barangayName = document.getElementById('barangay').value;
-      const zipCodeInput = document.getElementById('zip-code');
-      
-      if (cityName) {
-        const params = new URLSearchParams({
-          action: 'get_zipcode',
-          city_name: cityName,
-          barangay_name: barangayName || ''
-        });
-        
-        fetch(`get_locations.php?${params.toString()}`)
-          .then(response => response.json())
-          .then(data => {
-            if (data.zipcode) {
-              zipCodeInput.value = data.zipcode;
-            }
-          })
-          .catch(error => {
-            console.error('Error loading zip code:', error);
-          });
-      }
-    }
+    // Zip code is now loaded from the database (addresses.postal_code)
+    // No need to fetch from API since it's readonly and already populated
+    console.log('Zip code loaded from database:', document.getElementById('zip-code')?.value);
 
     // ========================================
     // CARD SELECTION
@@ -3024,222 +3039,15 @@
     // AUTO-SELECT LOCATION FROM USER DATA
     // ========================================
     
-    // User's stored location data from PHP
+    // User's stored location data from PHP (for display only - fields are readonly)
     const storedCity = "<?php echo addslashes($userCity); ?>";
     const storedProvince = "<?php echo addslashes($userProvince); ?>";
-    const storedRegion = "<?php echo addslashes($userRegion); ?>";
     const storedBarangay = "<?php echo addslashes($userBarangay); ?>";
+    const storedZipCode = "<?php echo addslashes($userZipCode); ?>";
     
-    // Function to auto-select location after regions are loaded
-    function autoSelectUserLocation() {
-      if (!storedCity && !storedProvince) return;
-      
-      console.log('Auto-selecting location:', { storedCity, storedProvince });
-      
-      // Use the API to find the region based on province/city
-      const params = new URLSearchParams({
-        action: 'find_region_by_location',
-        province: storedProvince,
-        city: storedCity
-      });
-      
-      fetch(`get_locations.php?${params.toString()}`)
-        .then(response => response.json())
-        .then(data => {
-          console.log('Location lookup result:', data);
-          
-          if (data.region_code) {
-            const regionSelect = document.getElementById('region');
-            
-            // Select the region
-            regionSelect.value = data.region_code;
-            regionSelect.dispatchEvent(new Event('change'));
-            
-            // Wait for provinces to load, then auto-select province and city
-            setTimeout(() => {
-              autoSelectProvinceAndCity(data.province_code, data.city_code);
-            }, 1500);
-          } else {
-            // Fallback to manual detection
-            autoSelectUserLocationFallback();
-          }
-        })
-        .catch(error => {
-          console.error('Error finding region:', error);
-          autoSelectUserLocationFallback();
-        });
-    }
-    
-    // Fallback function for manual region detection
-    function autoSelectUserLocationFallback() {
-      const regionSelect = document.getElementById('region');
-      let targetRegionCode = '';
-      
-      if (storedProvince.toLowerCase().includes('metro manila') || 
-          storedProvince.toLowerCase().includes('ncr') ||
-          storedCity.toLowerCase().includes('makati') ||
-          storedCity.toLowerCase().includes('quezon city') ||
-          storedCity.toLowerCase().includes('manila') ||
-          storedCity.toLowerCase().includes('pasig') ||
-          storedCity.toLowerCase().includes('taguig') ||
-          storedCity.toLowerCase().includes('mandaluyong') ||
-          storedCity.toLowerCase().includes('pasay') ||
-          storedCity.toLowerCase().includes('paranaque') ||
-          storedCity.toLowerCase().includes('muntinlupa') ||
-          storedCity.toLowerCase().includes('las pinas') ||
-          storedCity.toLowerCase().includes('marikina') ||
-          storedCity.toLowerCase().includes('san juan') ||
-          storedCity.toLowerCase().includes('caloocan') ||
-          storedCity.toLowerCase().includes('malabon') ||
-          storedCity.toLowerCase().includes('navotas') ||
-          storedCity.toLowerCase().includes('valenzuela') ||
-          storedCity.toLowerCase().includes('pateros')) {
-        // NCR - National Capital Region
-        for (let i = 0; i < regionSelect.options.length; i++) {
-          if (regionSelect.options[i].text.toLowerCase().includes('national capital') ||
-              regionSelect.options[i].text.toLowerCase().includes('ncr')) {
-            targetRegionCode = regionSelect.options[i].value;
-            regionSelect.value = targetRegionCode;
-            regionSelect.dispatchEvent(new Event('change'));
-            break;
-          }
-        }
-      }
-      
-      // After region is selected, try to auto-select city
-      if (targetRegionCode && storedCity) {
-        setTimeout(() => {
-          autoSelectCity();
-        }, 1500); // Wait for cities to load
-      }
-    }
-    
-    // Auto-select province and city using codes from API
-    function autoSelectProvinceAndCity(provinceCode, cityCode) {
-      const provinceSelect = document.getElementById('state');
-      const citySelect = document.getElementById('city');
-      
-      // Wait until provinces are loaded
-      if (provinceSelect.options.length <= 1 && provinceSelect.innerHTML.includes('Loading')) {
-        setTimeout(() => autoSelectProvinceAndCity(provinceCode, cityCode), 500);
-        return;
-      }
-      
-      // Select province by code
-      if (provinceCode) {
-        if (provinceCode === 'METRO_MANILA') {
-          // For NCR, province is already set to METRO_MANILA
-          provinceSelect.value = 'METRO_MANILA';
-        } else {
-          // Try to select by code
-          for (let i = 0; i < provinceSelect.options.length; i++) {
-            if (provinceSelect.options[i].value === provinceCode) {
-              provinceSelect.value = provinceCode;
-              provinceSelect.dispatchEvent(new Event('change'));
-              break;
-            }
-          }
-        }
-      }
-      
-      // Wait for cities to load, then select city
-      if (cityCode || storedCity) {
-        setTimeout(() => {
-          autoSelectCityByCode(cityCode);
-        }, 1500);
-      }
-    }
-    
-    // Auto-select city by code or name
-    function autoSelectCityByCode(cityCode) {
-      const citySelect = document.getElementById('city');
-      
-      // Wait until cities are loaded
-      if (citySelect.options.length <= 1) {
-        setTimeout(() => autoSelectCityByCode(cityCode), 500);
-        return;
-      }
-      
-      let found = false;
-      
-      // Try to select by code first
-      if (cityCode) {
-        for (let i = 0; i < citySelect.options.length; i++) {
-          if (citySelect.options[i].value === cityCode) {
-            citySelect.value = cityCode;
-            citySelect.dispatchEvent(new Event('change'));
-            found = true;
-            break;
-          }
-        }
-      }
-      
-      // If not found by code, try by name
-      if (!found && storedCity) {
-        for (let i = 0; i < citySelect.options.length; i++) {
-          const optionText = citySelect.options[i].text.toLowerCase();
-          const searchCity = storedCity.toLowerCase();
-          if (optionText.includes(searchCity) || searchCity.includes(optionText)) {
-            citySelect.value = citySelect.options[i].value;
-            citySelect.dispatchEvent(new Event('change'));
-            found = true;
-            break;
-          }
-        }
-      }
-      
-      // After city is selected, try to auto-select barangay
-      if (found && storedBarangay) {
-        setTimeout(() => {
-          autoSelectBarangay();
-        }, 1500);
-      }
-    }
-    
-    // Auto-select barangay by name
-    function autoSelectBarangay() {
-      const barangaySelect = document.getElementById('barangay');
-      
-      // Wait until barangays are loaded
-      if (barangaySelect.options.length <= 1) {
-        setTimeout(autoSelectBarangay, 500);
-        return;
-      }
-      
-      // Try to find matching barangay by name
-      if (storedBarangay) {
-        for (let i = 0; i < barangaySelect.options.length; i++) {
-          const optionText = barangaySelect.options[i].text.toLowerCase();
-          const searchBarangay = storedBarangay.toLowerCase();
-          if (optionText.includes(searchBarangay) || searchBarangay.includes(optionText)) {
-            barangaySelect.value = barangaySelect.options[i].value;
-            barangaySelect.dispatchEvent(new Event('change'));
-            break;
-          }
-        }
-      }
-    }
-    
-    function autoSelectCity() {
-      const citySelect = document.getElementById('city');
-      
-      // Wait until cities are loaded
-      if (citySelect.options.length <= 1) {
-        setTimeout(autoSelectCity, 500);
-        return;
-      }
-      
-      // Try to find matching city
-      for (let i = 0; i < citySelect.options.length; i++) {
-        if (citySelect.options[i].text.toLowerCase().includes(storedCity.toLowerCase()) ||
-            storedCity.toLowerCase().includes(citySelect.options[i].text.toLowerCase())) {
-          citySelect.value = citySelect.options[i].value;
-          citySelect.dispatchEvent(new Event('change'));
-          break;
-        }
-      }
-    }
-    
+    console.log('User location data:', { storedCity, storedProvince, storedBarangay, storedZipCode });
+    console.log('Zip code from PHP:', storedZipCode);
+
     // Location fields are read-only, no need to load regions dynamically
 
     // ========================================
@@ -3323,24 +3131,43 @@
         clearFieldError(idNum); 
       }
 
-      // ID Upload validation
-      if (!uploadedIdFile) {
-        const uploadContainer = document.getElementById('upload-container');
-        // Show error for upload
-        let uploadError = document.getElementById('upload-error');
+      // ID Upload validation - Front
+      if (!uploadedIdFileFront) {
+        const uploadContainer = document.getElementById('upload-container-front');
+        let uploadError = document.getElementById('upload-error-front');
         if (!uploadError) {
           uploadError = document.createElement('div');
-          uploadError.id = 'upload-error';
+          uploadError.id = 'upload-error-front';
           uploadError.className = 'field-error';
           uploadError.style.display = 'block';
           uploadError.style.marginTop = '5px';
           uploadContainer.parentNode.appendChild(uploadError);
         }
-        uploadError.textContent = 'Please upload a photo of your ID';
+        uploadError.textContent = 'Please upload front of your ID';
         uploadError.style.display = 'block';
         valid = false;
       } else {
-        const uploadError = document.getElementById('upload-error');
+        const uploadError = document.getElementById('upload-error-front');
+        if (uploadError) uploadError.style.display = 'none';
+      }
+      
+      // ID Upload validation - Back
+      if (!uploadedIdFileBack) {
+        const uploadContainer = document.getElementById('upload-container-back');
+        let uploadError = document.getElementById('upload-error-back');
+        if (!uploadError) {
+          uploadError = document.createElement('div');
+          uploadError.id = 'upload-error-back';
+          uploadError.className = 'field-error';
+          uploadError.style.display = 'block';
+          uploadError.style.marginTop = '5px';
+          uploadContainer.parentNode.appendChild(uploadError);
+        }
+        uploadError.textContent = 'Please upload back of your ID';
+        uploadError.style.display = 'block';
+        valid = false;
+      } else {
+        const uploadError = document.getElementById('upload-error-back');
         if (uploadError) uploadError.style.display = 'none';
       }
 

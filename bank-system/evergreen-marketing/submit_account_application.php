@@ -1,4 +1,9 @@
 <?php
+// Prevent any output before JSON
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Don't display errors to browser
+ini_set('log_errors', 1); // Log errors to file
+
 session_start([
    'cookie_httponly' => true,
    'cookie_secure' => isset($_SERVER['HTTPS']),
@@ -7,83 +12,76 @@ session_start([
 
 header('Content-Type: application/json');
 
+// Set error handler to return JSON
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    error_log("PHP Error [$errno]: $errstr in $errfile on line $errline");
+    if (!headers_sent()) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Server error occurred',
+            'debug' => $errstr . ' in ' . $errfile . ' on line ' . $errline
+        ]);
+        exit;
+    }
+});
+
 // Database connection
 $host = "localhost";
 $user = "root"; 
 $pass = ""; 
 $db = "BankingDB";
 
-$conn = new mysqli($host, $user, $pass, $db);
+try {
+    $conn = new mysqli($host, $user, $pass, $db);
 
-if ($conn->connect_error) {
+    if ($conn->connect_error) {
+        throw new Exception('Database connection failed: ' . $conn->connect_error);
+    }
+} catch (Exception $e) {
+    error_log("Database connection error: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit;
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
-    // Check if this is a FormData submission (with file) or JSON
-    $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
-    
-    if (strpos($contentType, 'multipart/form-data') !== false || !empty($_POST)) {
-        // FormData submission - get data from $_POST
-        $data = $_POST;
+    try {
+        // Check if this is a FormData submission (with file) or JSON
+        $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
         
-        // Parse JSON arrays
-        if (isset($data['selectedCards'])) {
-            $data['selectedCards'] = json_decode($data['selectedCards'], true) ?: [];
-        }
-        if (isset($data['additionalServices'])) {
-            $data['additionalServices'] = json_decode($data['additionalServices'], true) ?: [];
-        }
-    } else {
-        // JSON submission
-        $rawData = file_get_contents('php://input');
-        $data = json_decode($rawData, true);
-    }
-    
-    if (!$data) {
-        echo json_encode(['success' => false, 'message' => 'Invalid data received']);
-        exit;
-    }
-    
-    // Handle file upload
-    $idDocumentPath = null;
-    if (isset($_FILES['id_document']) && $_FILES['id_document']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = 'uploads/id_documents/';
-        
-        // Create directory if it doesn't exist
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        
-        // Validate file type
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-        $fileType = $_FILES['id_document']['type'];
-        
-        if (!in_array($fileType, $allowedTypes)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid file type. Only JPG, PNG, and PDF are allowed.']);
-            exit;
-        }
-        
-        // Validate file size (max 5MB)
-        $maxSize = 5 * 1024 * 1024;
-        if ($_FILES['id_document']['size'] > $maxSize) {
-            echo json_encode(['success' => false, 'message' => 'File is too large. Maximum size is 5MB.']);
-            exit;
-        }
-        
-        // Generate unique filename
-        $extension = pathinfo($_FILES['id_document']['name'], PATHINFO_EXTENSION);
-        $uniqueName = 'id_' . uniqid() . '_' . time() . '.' . $extension;
-        $targetPath = $uploadDir . $uniqueName;
-        
-        if (move_uploaded_file($_FILES['id_document']['tmp_name'], $targetPath)) {
-            $idDocumentPath = $targetPath;
+        if (strpos($contentType, 'multipart/form-data') !== false || !empty($_POST)) {
+            // FormData submission - get data from $_POST
+            $data = $_POST;
+            
+            // Parse JSON arrays
+            if (isset($data['selectedCards'])) {
+                $data['selectedCards'] = json_decode($data['selectedCards'], true) ?: [];
+            }
+            if (isset($data['additionalServices'])) {
+                $data['additionalServices'] = json_decode($data['additionalServices'], true) ?: [];
+            }
         } else {
-            echo json_encode(['success' => false, 'message' => 'Failed to upload ID document.']);
+            // JSON submission
+            $rawData = file_get_contents('php://input');
+            $data = json_decode($rawData, true);
+        }
+        
+        if (!$data) {
+            echo json_encode(['success' => false, 'message' => 'Invalid data received']);
             exit;
         }
+        
+        // Log received data for debugging
+        error_log("Received data: " . print_r($data, true));
+        error_log("FILES: " . print_r($_FILES, true));
+        
+    } catch (Exception $e) {
+        error_log("Error in data processing: " . $e->getMessage());
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Error processing request: ' . $e->getMessage()
+        ]);
+        exit;
     }
     
     // Start transaction
@@ -93,77 +91,243 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Generate unique application number
         $applicationNumber = generateApplicationNumber($conn);
         
-        // Extract and sanitize data
+        // Validate required fields
+        $requiredFields = ['firstName', 'lastName', 'email', 'phoneNumber', 'dateOfBirth', 'streetAddress', 'zipCode', 'idType', 'idNumber', 'employmentStatus', 'jobTitle', 'annualIncome', 'accountType'];
+        $missingFields = [];
+        
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || trim($data[$field]) === '') {
+                $missingFields[] = $field;
+            }
+        }
+        
+        if (!empty($missingFields)) {
+            throw new Exception("Missing required fields: " . implode(', ', $missingFields));
+        }
+        
+        // Extract and sanitize data (matching create-final.php structure)
         $firstName = $conn->real_escape_string(trim($data['firstName']));
+        $middleName = isset($data['middleName']) ? $conn->real_escape_string(trim($data['middleName'])) : '';
         $lastName = $conn->real_escape_string(trim($data['lastName']));
         $email = $conn->real_escape_string(trim($data['email']));
         $phoneNumber = $conn->real_escape_string(trim($data['phoneNumber']));
-        $dateOfBirth = $conn->real_escape_string(trim($data['dateOfBirth']));
+        $dateOfBirth = date('Y-m-d', strtotime($data['dateOfBirth'])); // Format to MySQL date
+        
+        // Get profile data from customer (gender, nationality, place_of_birth, civil_status, source_of_funds)
+        $gender = isset($data['gender']) ? $conn->real_escape_string(trim($data['gender'])) : null;
+        $nationality = isset($data['nationality']) ? $conn->real_escape_string(trim($data['nationality'])) : null;
+        $placeOfBirth = isset($data['placeOfBirth']) ? $conn->real_escape_string(trim($data['placeOfBirth'])) : null;
+        $civilStatus = isset($data['civilStatus']) ? $conn->real_escape_string(trim($data['civilStatus'])) : null;
+        $sourceOfFunds = isset($data['sourceOfFunds']) ? $conn->real_escape_string(trim($data['sourceOfFunds'])) : null;
+        
         $streetAddress = $conn->real_escape_string(trim($data['streetAddress']));
-        $barangay = $conn->real_escape_string(trim($data['barangay']));
-        $city = $conn->real_escape_string(trim($data['city']));
-        $state = $conn->real_escape_string(trim($data['state']));
-        $zipCode = $conn->real_escape_string(trim($data['zipCode']));
-        $ssn = $conn->real_escape_string(trim($data['socialSecurityNumber']));
+        
+        // Get IDs from session (these should be IDs, not names)
+        $customer_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
+        
+        // Get location IDs from the customer's existing address in database
+        $barangayId = null;
+        $cityId = null;
+        $provinceId = null;
+        
+        if ($customer_id) {
+            $locSql = "SELECT province_id, city_id, barangay_id 
+                       FROM addresses 
+                       WHERE customer_id = ? AND is_primary = 1 
+                       LIMIT 1";
+            $locStmt = $conn->prepare($locSql);
+            $locStmt->bind_param("i", $customer_id);
+            $locStmt->execute();
+            $locResult = $locStmt->get_result();
+            
+            if ($locResult->num_rows > 0) {
+                $location = $locResult->fetch_assoc();
+                $provinceId = $location['province_id'];
+                $cityId = $location['city_id'];
+                $barangayId = $location['barangay_id'];
+            }
+            $locStmt->close();
+        }
+        
+        $postalCode = $conn->real_escape_string(trim($data['zipCode']));
+        
         $idType = $conn->real_escape_string(trim($data['idType']));
         $idNumber = $conn->real_escape_string(trim($data['idNumber']));
         $employmentStatus = $conn->real_escape_string(trim($data['employmentStatus']));
-        $employerName = $conn->real_escape_string(trim($data['employerName']));
-        $jobTitle = $conn->real_escape_string(trim($data['jobTitle']));
+        $employerName = isset($data['employerName']) ? $conn->real_escape_string(trim($data['employerName'])) : '';
+        $occupation = $conn->real_escape_string(trim($data['jobTitle']));
         $annualIncome = floatval($data['annualIncome']);
         $accountType = $conn->real_escape_string(trim($data['accountType']));
         
-        // Selected cards as comma-separated string
-        $selectedCards = isset($data['selectedCards']) && is_array($data['selectedCards']) 
-            ? implode(',', $data['selectedCards']) 
-            : '';
+        // Terms accepted
+        $termsAccepted = 1; // Always 1 if they submitted the form
         
-        // Additional services as comma-separated string
-        $additionalServices = isset($data['additionalServices']) && is_array($data['additionalServices']) 
-            ? implode(',', $data['additionalServices']) 
-            : '';
+        // Handle ID image uploads (matching create-final.php structure)
+        // Use the same upload directory as Basic-operation
+        $uploadDir = '../Basic-operation/uploads/id_images/';
         
-        // Terms and agreements
-        $termsAccepted = isset($data['termsAccepted']) && $data['termsAccepted'] ? 1 : 0;
-        $privacyAcknowledged = isset($data['privacyAcknowledged']) && $data['privacyAcknowledged'] ? 1 : 0;
-        $marketingConsent = isset($data['marketingConsent']) && $data['marketingConsent'] ? 1 : 0;
+        // Create directory if it doesn't exist
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
         
-        // Insert into account_applications table
+        // Insert into account_applications table (matching create-final.php structure)
         $sql = "INSERT INTO account_applications (
-            application_number, application_status,
-            first_name, last_name, email, phone_number, date_of_birth,
-            street_address, barangay, city, state, zip_code,
-            ssn, id_type, id_number, id_document_path,
-            employment_status, employer_name, job_title, annual_income,
-            account_type, selected_cards, additional_services,
-            terms_accepted, privacy_acknowledged, marketing_consent,
+            application_number, application_status, customer_id,
+            first_name, middle_name, last_name, 
+            date_of_birth, place_of_birth, gender, civil_status, nationality,
+            email, phone_number,
+            street_address, barangay_id, city_id, province_id, postal_code,
+            id_type, id_number,
+            employment_status, employer_name, occupation, annual_income, source_of_funds,
+            account_type, terms_accepted,
             submitted_at
         ) VALUES (
-            ?, 'pending',
-            ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?, ?,
-            ?, ?, ?, ?,
+            ?, 'pending', ?,
             ?, ?, ?,
-            ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?,
             NOW()
         )";
         
         $stmt = $conn->prepare($sql);
+        
+        if (!$stmt) {
+            throw new Exception("Prepare failed: " . $conn->error);
+        }
+        
         $stmt->bind_param(
-            "ssssssssssssssssssdsssiii",
+            "sissssssssssiiiissssssdssi",
             $applicationNumber,
-            $firstName, $lastName, $email, $phoneNumber, $dateOfBirth,
-            $streetAddress, $barangay, $city, $state, $zipCode,
-            $ssn, $idType, $idNumber, $idDocumentPath,
-            $employmentStatus, $employerName, $jobTitle, $annualIncome,
-            $accountType, $selectedCards, $additionalServices,
-            $termsAccepted, $privacyAcknowledged, $marketingConsent
+            $customer_id,
+            $firstName, $middleName, $lastName,
+            $dateOfBirth, $placeOfBirth, $gender, $civilStatus, $nationality,
+            $email, $phoneNumber,
+            $streetAddress, $barangayId, $cityId, $provinceId, $postalCode,
+            $idType, $idNumber,
+            $employmentStatus, $employerName, $occupation, $annualIncome, $sourceOfFunds,
+            $accountType, $termsAccepted
         );
         
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            throw new Exception("Execute failed: " . $stmt->error);
+        }
+        
         $applicationId = $stmt->insert_id;
         $stmt->close();
+        
+        // Handle ID image uploads AFTER getting application_id (matching account-opening.js structure)
+        // Use the same upload directory as Basic-operation
+        $uploadDir = '../Basic-operation/uploads/id_images/';
+        
+        // Create upload directory if it doesn't exist
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+        
+        // Upload front image
+        if (isset($_FILES['id_front_image']) && $_FILES['id_front_image']['error'] === UPLOAD_ERR_OK) {
+            $frontFile = $_FILES['id_front_image'];
+            
+            // Validate file type
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+            if (!in_array($frontFile['type'], $allowedTypes)) {
+                throw new Exception('Invalid front image file type. Only JPG, PNG, and GIF are allowed.');
+            }
+            
+            // Validate file size (max 5MB)
+            $maxSize = 5 * 1024 * 1024;
+            if ($frontFile['size'] > $maxSize) {
+                throw new Exception('Front image file is too large. Maximum size is 5MB.');
+            }
+            
+            $frontExt = pathinfo($frontFile['name'], PATHINFO_EXTENSION);
+            $frontFilename = 'id_front_' . $applicationId . '_' . time() . '.' . $frontExt;
+            $frontPath = $uploadDir . $frontFilename;
+            
+            if (move_uploaded_file($frontFile['tmp_name'], $frontPath)) {
+                $idFrontPath = 'uploads/id_images/' . $frontFilename;
+                
+                // Assign file data to variables for bind_param
+                $frontFileName = $frontFile['name'];
+                $frontFileSize = $frontFile['size'];
+                $frontFileType = $frontFile['type'];
+                
+                // Store in application_documents table
+                $docSql = "INSERT INTO application_documents 
+                    (application_id, document_type, file_name, file_path, file_size, mime_type) 
+                    VALUES (?, ?, ?, ?, ?, ?)";
+                $docStmt = $conn->prepare($docSql);
+                $docType = 'id_front';
+                $docStmt->bind_param(
+                    "isssis",
+                    $applicationId,
+                    $docType,
+                    $frontFileName,
+                    $idFrontPath,
+                    $frontFileSize,
+                    $frontFileType
+                );
+                $docStmt->execute();
+                $docStmt->close();
+                
+                error_log("Front ID image uploaded: " . $idFrontPath);
+            }
+        }
+        
+        // Upload back image
+        if (isset($_FILES['id_back_image']) && $_FILES['id_back_image']['error'] === UPLOAD_ERR_OK) {
+            $backFile = $_FILES['id_back_image'];
+            
+            // Validate file type
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+            if (!in_array($backFile['type'], $allowedTypes)) {
+                throw new Exception('Invalid back image file type. Only JPG, PNG, and GIF are allowed.');
+            }
+            
+            // Validate file size (max 5MB)
+            $maxSize = 5 * 1024 * 1024;
+            if ($backFile['size'] > $maxSize) {
+                throw new Exception('Back image file is too large. Maximum size is 5MB.');
+            }
+            
+            $backExt = pathinfo($backFile['name'], PATHINFO_EXTENSION);
+            $backFilename = 'id_back_' . $applicationId . '_' . time() . '.' . $backExt;
+            $backPath = $uploadDir . $backFilename;
+            
+            if (move_uploaded_file($backFile['tmp_name'], $backPath)) {
+                $idBackPath = 'uploads/id_images/' . $backFilename;
+                
+                // Assign file data to variables for bind_param
+                $backFileName = $backFile['name'];
+                $backFileSize = $backFile['size'];
+                $backFileType = $backFile['type'];
+                
+                // Store in application_documents table
+                $docSql = "INSERT INTO application_documents 
+                    (application_id, document_type, file_name, file_path, file_size, mime_type) 
+                    VALUES (?, ?, ?, ?, ?, ?)";
+                $docStmt = $conn->prepare($docSql);
+                $docType = 'id_back';
+                $docStmt->bind_param(
+                    "isssis",
+                    $applicationId,
+                    $docType,
+                    $backFileName,
+                    $idBackPath,
+                    $backFileSize,
+                    $backFileType
+                );
+                $docStmt->execute();
+                $docStmt->close();
+                
+                error_log("Back ID image uploaded: " . $idBackPath);
+            }
+        }
         
         // Commit transaction
         $conn->commit();
@@ -178,13 +342,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
     } catch (Exception $e) {
         // Rollback transaction on error
-        $conn->rollback();
+        if ($conn) {
+            $conn->rollback();
+        }
         
         error_log("Application submission error: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         
         echo json_encode([
             'success' => false,
-            'message' => 'Error processing application. Please try again.'
+            'message' => 'Error processing application: ' . $e->getMessage(),
+            'debug' => [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]
         ]);
     }
     
@@ -192,7 +364,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     echo json_encode(['success' => false, 'message' => 'Invalid request method']);
 }
 
-$conn->close();
+if (isset($conn)) {
+    $conn->close();
+}
 
 // ========================================
 // HELPER FUNCTIONS

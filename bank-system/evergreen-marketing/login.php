@@ -622,6 +622,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="signup-text">
       Don't have an account? <a href="signup.php">Sign Up</a>
     </div>
+
+    <div class="signup-text" style="margin-top: 12px; background: #fff3e0; border: 1px solid #ffb74d;">
+      Need to activate your account? <a href="../Basic-operation/operations/app/views/auth/activate.php">Activate Online Banking</a>
+    </div>
   </div>
 
   <div class="right">

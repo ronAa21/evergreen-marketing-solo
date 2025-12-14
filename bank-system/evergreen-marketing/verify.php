@@ -45,49 +45,115 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
            if (!isset($registration_data['referral_code']) || empty($registration_data['referral_code'])) {
               error_log("WARNING: Referral code is missing from registration data!");
               $error = "System error: Referral code not generated. Please try again.";
-          } else 
-            // NOW insert the user into the database
-            $sql = "INSERT INTO bank_customers (first_name, middle_name, last_name, address, city_province, email, contact_number, birthday, password_hash, verification_code, bank_id, referral_code, total_points, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 1)";
+          } else {
+            // Start transaction
+            $conn->begin_transaction();
             
-                $stmt = $conn->prepare($sql);
-        if ($stmt) {
-              $stmt->bind_param("ssssssssssss",  // Changed from 11 's' to 12 's'
-        $registration_data['first_name'],
-       $registration_data['middle_name'],
-              $registration_data['last_name'],
-              $registration_data['address'],
-              $registration_data['city_province'],
-              $registration_data['email'],
-              $registration_data['contact_number'],
-              $registration_data['birthday'],
-              $registration_data['password'],
-              $registration_data['verification_code'],
-              $registration_data['bank_id'],
-              $registration_data['referral_code']  // ⭐ ADD THIS LINE
-              );
+            try {
+                // Format birthday to MySQL DATE format (YYYY-MM-DD)
+                $birthday_formatted = date('Y-m-d', strtotime($registration_data['birthday']));
                 
-                if ($stmt->execute()) {
-                    error_log("Account created successfully for: " . $registration_data['email']);
-                    
-                    // Set success flag BEFORE clearing temp data
-                    $_SESSION['account_created'] = true;
-                    $_SESSION['show_success_modal'] = true;
-                    $_SESSION['created_account_email'] = $registration_data['email'];
-                    
-                    // Clear temp session data
-                    unset($_SESSION['temp_registration']);
-                    
-                    // Set flag to show modal on page reload
-                    $show_success = true;
-                } else {
-                    $error = "Failed to create account: " . $stmt->error;
-                    error_log("Database error: " . $stmt->error);
+                // Insert into bank_customers table (without birthday - it goes to customer_profiles)
+                $sql = "INSERT INTO bank_customers (first_name, middle_name, last_name, email, contact_number, password_hash, verification_code, bank_id, referral_code, total_points, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 1)";
+                
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Database preparation error: " . $conn->error);
                 }
+                
+                $stmt->bind_param("sssssssss",
+                    $registration_data['first_name'],
+                    $registration_data['middle_name'],
+                    $registration_data['last_name'],
+                    $registration_data['email'],
+                    $registration_data['contact_number'],
+                    $registration_data['password'],
+                    $registration_data['verification_code'],
+                    $registration_data['bank_id'],
+                    $registration_data['referral_code']
+                );
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Failed to create customer account: " . $stmt->error);
+                }
+                
+                $customer_id = $conn->insert_id;
                 $stmt->close();
-            } else {
-                $error = "Database preparation error: " . $conn->error;
-                error_log("Prepare error: " . $conn->error);
+                
+                error_log("Customer account created with ID: " . $customer_id);
+                
+                // Insert into customer_profiles table with birthday
+                $sql_profile = "INSERT INTO customer_profiles (customer_id, date_of_birth, profile_created_at) VALUES (?, ?, NOW())";
+                
+                $stmt_profile = $conn->prepare($sql_profile);
+                if (!$stmt_profile) {
+                    throw new Exception("Profile preparation error: " . $conn->error);
+                }
+                
+                $stmt_profile->bind_param("is",
+                    $customer_id,
+                    $birthday_formatted
+                );
+                
+                if (!$stmt_profile->execute()) {
+                    throw new Exception("Failed to create customer profile: " . $stmt_profile->error);
+                }
+                
+                $stmt_profile->close();
+                error_log("Customer profile created for customer: " . $customer_id);
+                
+                // Insert into addresses table with postal_code
+                $sql_address = "INSERT INTO addresses (customer_id, address_type, address_line, province_id, city_id, barangay_id, postal_code, is_primary, created_at) VALUES (?, 'home', ?, ?, ?, ?, ?, 1, NOW())";
+                
+                $stmt_address = $conn->prepare($sql_address);
+                if (!$stmt_address) {
+                    throw new Exception("Address preparation error: " . $conn->error);
+                }
+                
+                $zip_code = $registration_data['zip_code'] ?? '';
+                
+                // Debug logging for zip code
+                error_log("Zip code from session: " . ($zip_code ? $zip_code : 'EMPTY'));
+                
+                $stmt_address->bind_param("isiiis",
+                    $customer_id,
+                    $registration_data['address_line'],
+                    $registration_data['province_id'],
+                    $registration_data['city_id'],
+                    $registration_data['barangay_id'],
+                    $zip_code
+                );
+                
+                if (!$stmt_address->execute()) {
+                    throw new Exception("Failed to create address: " . $stmt_address->error);
+                }
+                
+                $stmt_address->close();
+                error_log("Address created successfully for customer: " . $customer_id);
+                
+                // Commit transaction
+                $conn->commit();
+                
+                error_log("Account created successfully for: " . $registration_data['email']);
+                
+                // Set success flag BEFORE clearing temp data
+                $_SESSION['account_created'] = true;
+                $_SESSION['show_success_modal'] = true;
+                $_SESSION['created_account_email'] = $registration_data['email'];
+                
+                // Clear temp session data
+                unset($_SESSION['temp_registration']);
+                
+                // Set flag to show modal on page reload
+                $show_success = true;
+                
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $conn->rollback();
+                $error = "Failed to create account: " . $e->getMessage();
+                error_log("Registration error: " . $e->getMessage());
             }
+          }
         } else {
             $error = "Invalid verification code. Please try again.";
         }
