@@ -105,8 +105,9 @@ try {
         // SA = Savings Account, CHA = Checking Account
         // XXXX = Random 4-digit number
         // YYYY = Current year
-        // Check if it's a Savings Account (type_name contains 'Savings')
-        $isSavings = stripos($accountType['type_name'], 'Savings') !== false;
+        // Check if it's a Savings Account (check both application's account_type and matched type_name)
+        $isSavings = (stripos($accountTypeBase, 'Savings') !== false) || 
+                     (stripos($accountType['type_name'], 'Savings') !== false);
         $prefix = $isSavings ? 'SA' : 'CHA';
         $randomNumber = str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
         $year = date('Y');
