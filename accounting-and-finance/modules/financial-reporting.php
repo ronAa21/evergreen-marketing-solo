@@ -590,35 +590,7 @@ $current_user = getCurrentUser();
                             <input type="date" class="form-control form-control-modern" id="filter-date-to">
                         </div>
                     </div>
-                    <div class="col-lg-3 col-md-6">
-                        <div class="filter-group">
-                            <label class="filter-label">
-                                <i class="fas fa-cogs me-2" style="color: var(--primary-teal);"></i>Subsystem
-                            </label>
-                            <select class="form-select form-select-modern" id="filter-subsystem">
-                                <option value="">All Subsystems</option>
-                                <option value="bank-system">Bank System (Real Customer Accounts)</option>
-                                <option value="loan">Loan Subsystem (Real Borrowers)</option>
-                                <option value="payroll">Payroll (Real Employees - HRIS Integration)</option>
-                                <option value="hris-sia">HRIS-SIA (Real Employee Contracts)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-lg-3 col-md-6">
-                        <div class="filter-group">
-                            <label class="filter-label">
-                                <i class="fas fa-tags me-2" style="color: var(--primary-teal);"></i>Account Type
-                            </label>
-                            <select class="form-select form-select-modern" id="filter-account-type">
-                                <option value="">All Types</option>
-                                <option value="asset">Assets</option>
-                                <option value="liability">Liabilities</option>
-                                <option value="equity">Equity</option>
-                                <option value="revenue">Revenue</option>
-                                <option value="expense">Expenses</option>
-                            </select>
-                        </div>
-                    </div>
+
                 </div>
 
                 <div class="row g-4">
