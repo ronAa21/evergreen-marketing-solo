@@ -257,6 +257,27 @@ $current_user = getCurrentUser();
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="binConfirmModal" tabindex="-1" aria-labelledby="binConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" id="binConfirmHeader">
+                    <h5 class="modal-title" id="binConfirmModalLabel">
+                        <i class="fas fa-question-circle me-2"></i>Confirm Action
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="binConfirmBody">
+                    <p>Are you sure you want to proceed?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn" id="binConfirmBtn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- jQuery -->
@@ -266,6 +287,40 @@ $current_user = getCurrentUser();
     <script src="../assets/js/notifications.js"></script>
 
     <script>
+        // Custom confirmation modal helper
+        function showConfirmModal(title, message, btnText, btnClass, onConfirm) {
+            const modal = new bootstrap.Modal(document.getElementById('binConfirmModal'));
+            const header = document.getElementById('binConfirmHeader');
+            const titleEl = document.getElementById('binConfirmModalLabel');
+            const body = document.getElementById('binConfirmBody');
+            const confirmBtn = document.getElementById('binConfirmBtn');
+            
+            // Set header color based on action type
+            header.className = 'modal-header text-white ' + (btnClass.includes('danger') ? 'bg-danger' : 'bg-success');
+            
+            // Set icon based on action
+            const icon = btnClass.includes('danger') ? 'fa-exclamation-triangle' : 'fa-undo';
+            titleEl.innerHTML = '<i class="fas ' + icon + ' me-2"></i>' + title;
+            
+            // Set body content
+            body.innerHTML = message;
+            
+            // Set button
+            confirmBtn.className = 'btn ' + btnClass;
+            confirmBtn.innerHTML = '<i class="fas ' + (btnClass.includes('danger') ? 'fa-trash' : 'fa-check') + ' me-1"></i>' + btnText;
+            
+            // Remove old event listeners and add new one
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.addEventListener('click', function() {
+                modal.hide();
+                onConfirm();
+            });
+            
+            modal.show();
+        }
+        
         // Load bin data on page load
         $(document).ready(function() {
             loadBinData();
@@ -458,16 +513,18 @@ $current_user = getCurrentUser();
          * Restore report
          */
         function restoreReport(reportId) {
-            if (!confirm('Are you sure you want to restore this compliance report?')) {
-                return;
-            }
-
-            $.ajax({
-                url: 'api/compliance-reports.php',
-                method: 'POST',
-                data: { 
-                    action: 'restore_report',
-                    report_id: reportId
+            showConfirmModal(
+                'Restore Report',
+                '<p>Are you sure you want to restore this compliance report?</p><p class="text-muted small">It will be moved back to active reports.</p>',
+                'Restore',
+                'btn-success',
+                function() {
+                    $.ajax({
+                        url: 'api/compliance-reports.php',
+                        method: 'POST',
+                        data: { 
+                            action: 'restore_report',
+                            report_id: reportId
                 },
                 dataType: 'json',
                 success: function(response) {
@@ -481,46 +538,61 @@ $current_user = getCurrentUser();
                 error: function(xhr, status, error) {
                     showNotification('Restore failed: ' + error, 'error');
                 }
-            });
+                    });
+                }
+            );
         }
 
         /**
          * Permanently delete report
          */
         function permanentDeleteReport(reportId) {
-            if (!confirm('Are you sure you want to permanently delete this compliance report? This action cannot be undone.')) {
-                return;
-            }
-
-            $.ajax({
-                url: 'api/compliance-reports.php',
-                method: 'POST',
-                data: { 
-                    action: 'permanent_delete_report',
-                    report_id: reportId
-                },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Report permanently deleted!', 'success');
-                        loadBinData(); // Refresh bin
-                    } else {
-                        showNotification('Delete failed: ' + response.error, 'error');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    showNotification('Delete failed: ' + error, 'error');
+            showConfirmModal(
+                'Permanently Delete Report',
+                '<p>Are you sure you want to permanently delete this compliance report?</p><p class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>This action cannot be undone.</p>',
+                'Delete Permanently',
+                'btn-danger',
+                function() {
+                    $.ajax({
+                        url: 'api/compliance-reports.php',
+                        method: 'POST',
+                        data: { 
+                            action: 'permanent_delete_report',
+                            report_id: reportId
+                        },
+                        dataType: 'json',
+                        success: function(response) {
+                            if (response.success) {
+                                showNotification('Report permanently deleted!', 'success');
+                                loadBinData();
+                            } else {
+                                showNotification('Delete failed: ' + response.error, 'error');
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            showNotification('Delete failed: ' + error, 'error');
+                        }
+                    });
                 }
-            });
+            );
         }
 
         /**
          * Restore all reports
          */
         function restoreAll() {
-            if (!confirm('Are you sure you want to restore ALL deleted items? This will move all items back to their active state.')) {
-                return;
-            }
+            showConfirmModal(
+                'Restore All Items',
+                '<p>Are you sure you want to restore ALL deleted items?</p><p class="text-muted small">This will move all items back to their active state.</p>',
+                'Restore All',
+                'btn-success',
+                function() {
+                    performRestoreAll();
+                }
+            );
+        }
+        
+        function performRestoreAll() {
 
             // Show loading state
             const button = event.target;
@@ -612,20 +684,25 @@ $current_user = getCurrentUser();
          * Empty bin (permanently delete all)
          */
         function emptyBin() {
-            if (!confirm('WARNING: Are you sure you want to PERMANENTLY DELETE ALL items in the bin? This action cannot be undone and will permanently remove all deleted items.')) {
-                return;
-            }
-
-            // Double confirmation for safety
-            if (!confirm('This is your final warning. Click OK to permanently delete ALL items in the bin. This cannot be undone.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Empty Bin - Final Warning',
+                '<p class="text-danger"><strong><i class="fas fa-exclamation-triangle me-1"></i>WARNING:</strong> You are about to PERMANENTLY DELETE ALL items in the bin.</p><p class="text-danger small">This action cannot be undone and will permanently remove all deleted items.</p>',
+                'Empty Bin Permanently',
+                'btn-danger',
+                function() {
+                    performEmptyBin();
+                }
+            );
+        }
+        
+        function performEmptyBin() {
             // Show loading state
-            const button = event.target;
-            const originalContent = button.innerHTML;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
-            button.disabled = true;
+            const button = document.querySelector('[onclick="emptyBin()"]');
+            const originalContent = button ? button.innerHTML : '';
+            if (button) {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+                button.disabled = true;
+            }
 
             // Empty bin for all item types
             $.when(
@@ -823,51 +900,7 @@ $current_user = getCurrentUser();
             }
         }
         
-        function restoreReport(reportId) {
-            if (!confirm('Are you sure you want to restore this report? It will be moved back to active compliance reports.')) {
-                return;
-            }
-            $.ajax({
-                url: 'api/compliance-reports.php',
-                method: 'POST',
-                data: { action: 'restore_report', report_id: reportId },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Report restored successfully!', 'success');
-                        loadBinData();
-                    } else {
-                        showNotification('Restore failed: ' + response.error, 'error');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    showNotification('Restore failed: ' + error, 'error');
-                }
-            });
-        }
-        
-        function permanentDeleteReport(reportId) {
-            if (!confirm('WARNING: Are you sure you want to permanently delete this report? This action cannot be undone.')) {
-                return;
-            }
-            $.ajax({
-                url: 'api/compliance-reports.php',
-                method: 'POST',
-                data: { action: 'permanent_delete_report', report_id: reportId },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Report permanently deleted!', 'success');
-                        loadBinData();
-                    } else {
-                        showNotification('Permanent delete failed: ' + response.error, 'error');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    showNotification('Permanent delete failed: ' + error, 'error');
-                }
-            });
-        }
+        // Note: restoreReport and permanentDeleteReport are defined above with modal support
         
         function refreshBin() {
             loadBinData();
@@ -933,9 +966,18 @@ $current_user = getCurrentUser();
                 return;
             }
             
-            if (!confirm('Are you sure you want to restore this transaction? It will be moved back to active transactions.')) {
-                return;
-            }
+            showConfirmModal(
+                'Restore Transaction',
+                '<p>Are you sure you want to restore this transaction?</p><p class="text-muted small">It will be moved back to active transactions.</p>',
+                'Restore',
+                'btn-success',
+                function() {
+                    performRestoreTransaction(transactionId);
+                }
+            );
+        }
+        
+        function performRestoreTransaction(transactionId) {
 
             // Extract numeric ID from prefixed ID if needed (e.g., "JE-123" -> 123)
             let numericId = transactionId;
@@ -990,10 +1032,18 @@ $current_user = getCurrentUser();
          * Permanently delete transaction
          */
         function permanentDeleteTransaction(transactionId) {
-            if (!confirm('WARNING: Are you sure you want to permanently delete this transaction? This action cannot be undone.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Permanently Delete Transaction',
+                '<p>Are you sure you want to permanently delete this transaction?</p><p class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>This action cannot be undone.</p>',
+                'Delete Permanently',
+                'btn-danger',
+                function() {
+                    performPermanentDeleteTransaction(transactionId);
+                }
+            );
+        }
+        
+        function performPermanentDeleteTransaction(transactionId) {
             $.ajax({
                 url: 'api/transaction-data.php',
                 method: 'POST',
@@ -1025,10 +1075,18 @@ $current_user = getCurrentUser();
                 return;
             }
             
-            if (!confirm('Are you sure you want to restore this bank transaction?')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Restore Bank Transaction',
+                '<p>Are you sure you want to restore this bank transaction?</p><p class="text-muted small">It will be moved back to active transactions.</p>',
+                'Restore',
+                'btn-success',
+                function() {
+                    performRestoreBankTransaction(transactionId);
+                }
+            );
+        }
+        
+        function performRestoreBankTransaction(transactionId) {
             $.ajax({
                 url: 'api/transaction-data.php',
                 method: 'POST',
@@ -1055,10 +1113,18 @@ $current_user = getCurrentUser();
          * Permanently delete bank transaction from bin
          */
         function permanentDeleteBankTransaction(transactionId) {
-            if (!confirm('WARNING: Are you sure you want to permanently delete this bank transaction? This action cannot be undone.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Permanently Delete Bank Transaction',
+                '<p>Are you sure you want to permanently delete this bank transaction?</p><p class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>This action cannot be undone.</p>',
+                'Delete Permanently',
+                'btn-danger',
+                function() {
+                    performPermanentDeleteBankTransaction(transactionId);
+                }
+            );
+        }
+        
+        function performPermanentDeleteBankTransaction(transactionId) {
             $.ajax({
                 url: 'api/transaction-data.php',
                 method: 'POST',
@@ -1090,10 +1156,18 @@ $current_user = getCurrentUser();
                 return;
             }
             
-            if (!confirm('Are you sure you want to restore this loan? It will be moved back to active loans.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Restore Loan',
+                '<p>Are you sure you want to restore this loan?</p><p class="text-muted small">It will be moved back to active loans.</p>',
+                'Restore',
+                'btn-success',
+                function() {
+                    performRestoreLoan(loanId);
+                }
+            );
+        }
+        
+        function performRestoreLoan(loanId) {
             $.ajax({
                 url: 'api/loan-data.php',
                 method: 'POST',
@@ -1122,10 +1196,18 @@ $current_user = getCurrentUser();
          * Permanently delete loan from bin
          */
         function permanentDeleteLoan(loanId) {
-            if (!confirm('WARNING: Are you sure you want to permanently delete this loan? This action cannot be undone.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Permanently Delete Loan',
+                '<p>Are you sure you want to permanently delete this loan?</p><p class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>This action cannot be undone.</p>',
+                'Delete Permanently',
+                'btn-danger',
+                function() {
+                    performPermanentDeleteLoan(loanId);
+                }
+            );
+        }
+        
+        function performPermanentDeleteLoan(loanId) {
             $.ajax({
                 url: 'api/loan-data.php',
                 method: 'POST',
@@ -1157,10 +1239,18 @@ $current_user = getCurrentUser();
                 return;
             }
             
-            if (!confirm('Are you sure you want to restore this loan application? It will be moved back to active applications.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Restore Loan Application',
+                '<p>Are you sure you want to restore this loan application?</p><p class="text-muted small">It will be moved back to active applications.</p>',
+                'Restore',
+                'btn-success',
+                function() {
+                    performRestoreLoanApplication(applicationId);
+                }
+            );
+        }
+        
+        function performRestoreLoanApplication(applicationId) {
             $.ajax({
                 url: 'api/loan-data.php',
                 method: 'POST',
@@ -1189,10 +1279,18 @@ $current_user = getCurrentUser();
          * Permanently delete loan application from bin
          */
         function permanentDeleteLoanApplication(applicationId) {
-            if (!confirm('WARNING: Are you sure you want to permanently delete this loan application? This action cannot be undone.')) {
-                return;
-            }
-
+            showConfirmModal(
+                'Permanently Delete Loan Application',
+                '<p>Are you sure you want to permanently delete this loan application?</p><p class="text-danger small"><i class="fas fa-exclamation-triangle me-1"></i>This action cannot be undone.</p>',
+                'Delete Permanently',
+                'btn-danger',
+                function() {
+                    performPermanentDeleteLoanApplication(applicationId);
+                }
+            );
+        }
+        
+        function performPermanentDeleteLoanApplication(applicationId) {
             $.ajax({
                 url: 'api/loan-data.php',
                 method: 'POST',
