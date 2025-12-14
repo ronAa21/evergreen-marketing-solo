@@ -676,6 +676,40 @@ $current_user = getCurrentUser();
         </div>
     </div>
 
+    <!-- Approve Confirmation Modal -->
+    <div class="modal fade" id="approveConfirmModal" tabindex="-1" aria-labelledby="approveConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white border-0">
+                    <h5 class="modal-title" id="approveConfirmModalLabel">
+                        <i class="fas fa-check-circle me-2"></i>Confirm Approval
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <div class="text-center mb-4">
+                        <div class="approve-icon-wrapper mb-3">
+                            <i class="fas fa-user-check fa-3x text-success"></i>
+                        </div>
+                        <h5 class="mb-3">Approve Application?</h5>
+                        <p class="text-muted mb-0">Are you sure you want to approve this application?</p>
+                        <p class="text-muted">This will automatically:</p>
+                    </div>
+
+                    <input type="hidden" id="approveApplicationId" value="">
+                </div>
+                <div class="modal-footer border-0 justify-content-center pb-4">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-success px-4" id="confirmApproveBtn" onclick="executeApproveApplication()">
+                        <i class="fas fa-check me-1"></i>Yes, Approve
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Account Detail Modal -->
     <div class="modal fade" id="accountDetailModal" tabindex="-1" aria-labelledby="accountDetailModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
@@ -710,6 +744,9 @@ $current_user = getCurrentUser();
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
     <!-- Custom JS -->
     <script src="../assets/js/general-ledger.js"></script>
     <script src="../assets/js/notifications.js"></script>

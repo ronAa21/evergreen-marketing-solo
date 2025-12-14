@@ -313,8 +313,11 @@ CREATE TABLE account_applications (
   annual_income decimal(15,2) DEFAULT NULL,
   source_of_funds varchar(100) DEFAULT NULL,
   account_type varchar(50) DEFAULT NULL,
+  selected_cards TEXT DEFAULT NULL COMMENT 'Comma-separated: debit, credit, prepaid',
+  additional_services TEXT DEFAULT NULL COMMENT 'Comma-separated: online, mobile, overdraft, alerts',
   terms_accepted tinyint(1) DEFAULT 0,
   privacy_acknowledged tinyint(1) DEFAULT 0,
+  marketing_consent tinyint(1) DEFAULT 0,
   submitted_at datetime DEFAULT current_timestamp(),
   reviewed_at datetime DEFAULT NULL,
   reviewed_by_employee_id int(11) DEFAULT NULL,
@@ -1449,6 +1452,63 @@ AND UPPER(TRIM(lr.status)) = 'APPROVED'
 ORDER BY lr.leave_request_id;
 
 SELECT '=== FIX COMPLETE ===' as status;
+
+-- ========================================
+-- ACCOUNT APPLICATIONS COLUMN MIGRATION
+-- ========================================
+-- Add selected_cards and additional_services columns if they don't exist
+-- This is for existing databases that need the new columns
+
+SET @col_exists = (
+    SELECT COUNT(*) 
+    FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = 'BankingDB' 
+    AND TABLE_NAME = 'account_applications' 
+    AND COLUMN_NAME = 'selected_cards'
+);
+
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE account_applications ADD COLUMN selected_cards TEXT DEFAULT NULL COMMENT ''Comma-separated: debit, credit, prepaid'' AFTER account_type',
+    'SELECT "selected_cards column already exists" AS message'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists2 = (
+    SELECT COUNT(*) 
+    FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = 'BankingDB' 
+    AND TABLE_NAME = 'account_applications' 
+    AND COLUMN_NAME = 'additional_services'
+);
+
+SET @sql = IF(@col_exists2 = 0,
+    'ALTER TABLE account_applications ADD COLUMN additional_services TEXT DEFAULT NULL COMMENT ''Comma-separated: online, mobile, overdraft, alerts'' AFTER selected_cards',
+    'SELECT "additional_services column already exists" AS message'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @col_exists3 = (
+    SELECT COUNT(*) 
+    FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA = 'BankingDB' 
+    AND TABLE_NAME = 'account_applications' 
+    AND COLUMN_NAME = 'marketing_consent'
+);
+
+SET @sql = IF(@col_exists3 = 0,
+    'ALTER TABLE account_applications ADD COLUMN marketing_consent TINYINT(1) DEFAULT 0 AFTER privacy_acknowledged',
+    'SELECT "marketing_consent column already exists" AS message'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ========================================
 -- END OF UNIFIED SCHEMA

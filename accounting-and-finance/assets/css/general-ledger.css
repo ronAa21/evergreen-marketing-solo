@@ -1548,3 +1548,141 @@ body {
     font-weight: 600;
     color: #495057;
 }
+
+/* 
+========================================
+   APPROVE CONFIRMATION MODAL STYLES
+   ======================================== */
+
+#approveConfirmModal .modal-content {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#approveConfirmModal .modal-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    padding: 1.25rem 1.5rem;
+}
+
+#approveConfirmModal .modal-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+#approveConfirmModal .approve-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(32, 201, 151, 0.1) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    animation: pulse-success 2s infinite;
+}
+
+@keyframes pulse-success {
+    0% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 15px rgba(40, 167, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+    }
+}
+
+#approveConfirmModal .approval-actions-list {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+#approveConfirmModal .approval-action-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#approveConfirmModal .approval-action-item:last-child {
+    margin-bottom: 0;
+}
+
+#approveConfirmModal .approval-action-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+#approveConfirmModal .approval-action-item i {
+    width: 24px;
+    text-align: center;
+}
+
+#approveConfirmModal .approval-action-item span {
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+#approveConfirmModal .modal-footer {
+    gap: 1rem;
+}
+
+#approveConfirmModal .btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 0.6rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+#approveConfirmModal .btn-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+}
+
+#approveConfirmModal .btn-success:hover {
+    background: linear-gradient(135deg, #218838 0%, #1aa179 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+#approveConfirmModal .btn-outline-secondary {
+    border: 2px solid #6c757d;
+}
+
+#approveConfirmModal .btn-outline-secondary:hover {
+    background: #6c757d;
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* Loading state for confirm button */
+#approveConfirmModal .btn-success.loading {
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+#approveConfirmModal .btn-success.loading::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

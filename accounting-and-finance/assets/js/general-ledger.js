@@ -1024,13 +1024,7 @@ function viewTransaction() {
     showNotification('Opening transaction details...', 'info');
 }
 
-function exportAccounts() {
-    showNotification('Preparing account export...', 'info');
-}
-
-function exportTransactions() {
-    showNotification('Generating transaction export...', 'info');
-}
+// exportAccounts and exportTransactions are defined in the EXPORT FUNCTIONS section below
 
 function printTransactions() {
     const table = document.getElementById('transactions-table');
@@ -1868,7 +1862,143 @@ function resetAuditFilter() {
 }
 
 function exportAuditTrail() {
-    showNotification('Export functionality coming soon', 'info');
+    const dateFrom = document.getElementById('audit-date-from')?.value || '';
+    const dateTo = document.getElementById('audit-date-to')?.value || '';
+    
+    showNotification('Generating PDF report...', 'info');
+    
+    const params = new URLSearchParams();
+    params.append('action', 'get_audit_trail');
+    params.append('limit', '1000');
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    fetch(`../modules/api/general-ledger-data.php?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data.length > 0) {
+                generateAuditTrailPDF(data.data, dateFrom, dateTo);
+            } else {
+                showNotification('No audit records to export', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('Error exporting audit trail:', error);
+            showNotification('Error exporting audit trail', 'error');
+        });
+}
+
+function generateAuditTrailPDF(auditLogs, dateFrom, dateTo) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    
+    // Colors
+    const primaryColor = [0, 128, 128];
+    const headerBg = [0, 128, 128];
+    const lightGray = [248, 249, 250];
+    
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 297, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EVERGREEN', 14, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Secure. Invest. Achieve', 14, 25);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Audit Trail Report', 297 - 14, 18, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const dateRange = dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All Records';
+    doc.text(`Period: ${dateRange}`, 297 - 14, 25, { align: 'right' });
+    
+    // Summary
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary', 14, 45);
+    
+    // Count by action type
+    const actionCounts = {};
+    auditLogs.forEach(log => {
+        const action = log.action || 'Unknown';
+        actionCounts[action] = (actionCounts[action] || 0) + 1;
+    });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Entries: ${auditLogs.length}`, 14, 52);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 58);
+    
+    // Action breakdown
+    let xPos = 120;
+    const topActions = Object.entries(actionCounts).slice(0, 4);
+    topActions.forEach(([action, count]) => {
+        doc.text(`${action}: ${count}`, xPos, 52);
+        xPos += 45;
+    });
+    
+    // Table
+    const tableData = auditLogs.map((log, index) => [
+        index + 1,
+        log.created_at || '-',
+        log.username || log.full_name || 'System',
+        log.action || '-',
+        log.object_type || '-',
+        (log.description || '-').substring(0, 50),
+        log.ip_address || '-'
+    ]);
+    
+    doc.autoTable({
+        startY: 65,
+        head: [['#', 'Date/Time', 'User', 'Action', 'Object Type', 'Description', 'IP Address']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+            fillColor: headerBg,
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'center'
+        },
+        bodyStyles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 12 },
+            1: { halign: 'center', cellWidth: 40 },
+            2: { halign: 'left', cellWidth: 35 },
+            3: { halign: 'left', cellWidth: 30 },
+            4: { halign: 'left', cellWidth: 35 },
+            5: { halign: 'left', cellWidth: 70 },
+            6: { halign: 'center', cellWidth: 30 }
+        },
+        alternateRowStyles: { fillColor: lightGray },
+        margin: { left: 14, right: 14 },
+        didDrawPage: function(data) {
+            doc.setFontSize(8);
+            doc.setTextColor(128, 128, 128);
+            doc.text(`Page ${data.pageNumber}`, 297 / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+            doc.text('© 2025 Evergreen Accounting & Finance System', 14, doc.internal.pageSize.height - 10);
+        }
+    });
+    
+    // Footer summary
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.setFillColor(...primaryColor);
+    doc.rect(14, finalY, 269, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`TOTAL AUDIT ENTRIES: ${auditLogs.length}`, 20, finalY + 7);
+    doc.text(`Report Generated: ${new Date().toLocaleString()}`, 269, finalY + 7, { align: 'right' });
+    
+    const filename = `Audit_Trail_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+    showNotification('PDF exported successfully!', 'success');
 }
 
 // ========================================
@@ -2143,36 +2273,23 @@ function printTrialBalance() {
 
 function exportAccounts() {
     const search = document.getElementById('account-search')?.value || '';
+    const accountType = document.getElementById('account-type-filter')?.value || '';
+    
+    showNotification('Generating PDF report...', 'info');
     
     const params = new URLSearchParams();
-    params.append('action', 'export_accounts');
+    params.append('action', 'get_accounts');
+    params.append('limit', '1000'); // Get all accounts for export
     if (search) params.append('search', search);
+    if (accountType) params.append('account_type', accountType);
     
     fetch(`../modules/api/general-ledger-data.php?${params.toString()}`)
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                // Create CSV content
-                let csv = 'Account Code,Account Name,Type,Balance,Status\n';
-                
-                data.data.forEach(account => {
-                    csv += `"${account.code}","${account.name}","${account.type}",${account.balance},"${account.status}"\n`;
-                });
-                
-                // Download CSV
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', data.filename || 'accounts_export.csv');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showNotification('Accounts exported successfully', 'success');
+            if (data.success && data.data.length > 0) {
+                generateAccountsPDF(data.data);
             } else {
-                showNotification(data.message || 'Error exporting accounts', 'error');
+                showNotification('No accounts to export', 'warning');
             }
         })
         .catch(error => {
@@ -2181,48 +2298,261 @@ function exportAccounts() {
         });
 }
 
+function generateAccountsPDF(accounts) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    
+    // Colors
+    const primaryColor = [0, 128, 128]; // Teal
+    const headerBg = [0, 128, 128];
+    const lightGray = [248, 249, 250];
+    
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 297, 35, 'F');
+    
+    // Logo placeholder and title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EVERGREEN', 14, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Secure. Invest. Achieve', 14, 25);
+    
+    // Report title
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Accounts Report', 297 - 14, 18, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, 297 - 14, 25, { align: 'right' });
+    
+    // Summary section
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary', 14, 45);
+    
+    // Calculate totals
+    const totalBalance = accounts.reduce((sum, acc) => sum + (parseFloat(acc.available_balance) || 0), 0);
+    const accountTypes = {};
+    accounts.forEach(acc => {
+        const type = acc.account_type || 'Unknown';
+        accountTypes[type] = (accountTypes[type] || 0) + 1;
+    });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Accounts: ${accounts.length}`, 14, 52);
+    doc.text(`Total Balance: ₱${totalBalance.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 14, 58);
+    
+    // Account type breakdown
+    let xPos = 100;
+    Object.entries(accountTypes).forEach(([type, count]) => {
+        doc.text(`${type}: ${count}`, xPos, 52);
+        xPos += 50;
+    });
+    
+    // Table
+    const tableData = accounts.map((acc, index) => [
+        index + 1,
+        acc.account_number || '-',
+        acc.account_name || '-',
+        acc.account_type || '-',
+        `₱${(parseFloat(acc.available_balance) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ]);
+    
+    doc.autoTable({
+        startY: 65,
+        head: [['#', 'Account Number', 'Account Name', 'Account Type', 'Available Balance']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+            fillColor: headerBg,
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 10,
+            halign: 'center'
+        },
+        bodyStyles: {
+            fontSize: 9,
+            cellPadding: 3
+        },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 15 },
+            1: { halign: 'left', cellWidth: 45 },
+            2: { halign: 'left', cellWidth: 80 },
+            3: { halign: 'center', cellWidth: 40 },
+            4: { halign: 'right', cellWidth: 50 }
+        },
+        alternateRowStyles: {
+            fillColor: lightGray
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: function(data) {
+            // Footer on each page
+            doc.setFontSize(8);
+            doc.setTextColor(128, 128, 128);
+            doc.text(
+                `Page ${data.pageNumber}`,
+                297 / 2,
+                doc.internal.pageSize.height - 10,
+                { align: 'center' }
+            );
+            doc.text(
+                '© 2025 Evergreen Accounting & Finance System',
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+    });
+    
+    // Total row at the end
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.setFillColor(...primaryColor);
+    doc.rect(14, finalY, 269, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL', 20, finalY + 7);
+    doc.text(`₱${totalBalance.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 269, finalY + 7, { align: 'right' });
+    
+    // Save PDF
+    const filename = `Accounts_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+    
+    showNotification('PDF exported successfully!', 'success');
+}
+
 function exportTransactions() {
     const dateFrom = document.getElementById('transaction-from')?.value || '';
     const dateTo = document.getElementById('transaction-to')?.value || '';
-    const type = document.getElementById('transaction-type')?.value || '';
+    
+    showNotification('Generating PDF report...', 'info');
     
     const params = new URLSearchParams();
-    params.append('action', 'export_transactions');
+    params.append('action', 'get_transactions');
+    params.append('limit', '1000');
     if (dateFrom) params.append('date_from', dateFrom);
     if (dateTo) params.append('date_to', dateTo);
-    if (type) params.append('type', type);
     
     fetch(`../modules/api/general-ledger-data.php?${params.toString()}`)
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                // Create CSV content
-                let csv = 'Journal Number,Entry Date,Type,Description,Reference Number,Debit,Credit,Status,Created By\n';
-                
-                data.data.forEach(txn => {
-                    csv += `"${txn.journal_no}","${txn.entry_date}","${txn.type}","${txn.description}","${txn.reference_no || ''}",${txn.debit},${txn.credit},"${txn.status}","${txn.created_by}"\n`;
-                });
-                
-                // Download CSV
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', data.filename || 'transactions_export.csv');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showNotification('Transactions exported successfully', 'success');
+            if (data.success && data.data.length > 0) {
+                generateTransactionsPDF(data.data, dateFrom, dateTo);
             } else {
-                showNotification(data.message || 'Error exporting transactions', 'error');
+                showNotification('No transactions to export', 'warning');
             }
         })
         .catch(error => {
             console.error('Error exporting transactions:', error);
             showNotification('Error exporting transactions', 'error');
         });
+}
+
+function generateTransactionsPDF(transactions, dateFrom, dateTo) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    
+    // Colors
+    const primaryColor = [0, 128, 128];
+    const headerBg = [0, 128, 128];
+    const lightGray = [248, 249, 250];
+    
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 297, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EVERGREEN', 14, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Secure. Invest. Achieve', 14, 25);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Transaction Records', 297 - 14, 18, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const dateRange = dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All Records';
+    doc.text(`Period: ${dateRange}`, 297 - 14, 25, { align: 'right' });
+    
+    // Summary
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary', 14, 45);
+    
+    const totalDebit = transactions.reduce((sum, t) => sum + (parseFloat(t.total_debit) || 0), 0);
+    const totalCredit = transactions.reduce((sum, t) => sum + (parseFloat(t.total_credit) || 0), 0);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Transactions: ${transactions.length}`, 14, 52);
+    doc.text(`Total Debit: ₱${totalDebit.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 80, 52);
+    doc.text(`Total Credit: ₱${totalCredit.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 160, 52);
+    
+    // Table
+    const tableData = transactions.map((txn, index) => [
+        index + 1,
+        txn.journal_no || '-',
+        txn.entry_date || '-',
+        (txn.description || '-').substring(0, 40),
+        `₱${(parseFloat(txn.total_debit) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+        `₱${(parseFloat(txn.total_credit) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+        txn.status || '-'
+    ]);
+    
+    doc.autoTable({
+        startY: 60,
+        head: [['#', 'Transaction ID', 'Date', 'Description', 'Debit', 'Credit', 'Status']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+            fillColor: headerBg,
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'center'
+        },
+        bodyStyles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 12 },
+            1: { halign: 'left', cellWidth: 35 },
+            2: { halign: 'center', cellWidth: 28 },
+            3: { halign: 'left', cellWidth: 80 },
+            4: { halign: 'right', cellWidth: 35 },
+            5: { halign: 'right', cellWidth: 35 },
+            6: { halign: 'center', cellWidth: 25 }
+        },
+        alternateRowStyles: { fillColor: lightGray },
+        margin: { left: 14, right: 14 },
+        didDrawPage: function(data) {
+            doc.setFontSize(8);
+            doc.setTextColor(128, 128, 128);
+            doc.text(`Page ${data.pageNumber}`, 297 / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+            doc.text('© 2025 Evergreen Accounting & Finance System', 14, doc.internal.pageSize.height - 10);
+        }
+    });
+    
+    // Totals row
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.setFillColor(...primaryColor);
+    doc.rect(14, finalY, 269, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL', 20, finalY + 7);
+    doc.text(`₱${totalDebit.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 180, finalY + 7, { align: 'right' });
+    doc.text(`₱${totalCredit.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 230, finalY + 7, { align: 'right' });
+    
+    const filename = `Transaction_Records_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+    showNotification('PDF exported successfully!', 'success');
 }
 
 
@@ -2640,9 +2970,41 @@ function confirmApproveApplication(applicationId = null) {
     const appId = applicationId || currentApplicationId;
     if (!appId) return;
     
-    if (confirm('Are you sure you want to approve this application? This will automatically create a customer account and link the requested cards.')) {
-        approveApplication(appId);
+    // Set the application ID in the hidden field
+    document.getElementById('approveApplicationId').value = appId;
+    
+    // Show the custom confirmation modal
+    const approveModal = new bootstrap.Modal(document.getElementById('approveConfirmModal'));
+    approveModal.show();
+}
+
+function executeApproveApplication() {
+    const appId = document.getElementById('approveApplicationId').value;
+    if (!appId) return;
+    
+    // Update button to loading state
+    const confirmBtn = document.getElementById('confirmApproveBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+        confirmBtn.classList.add('loading');
     }
+    
+    // Call the approve function
+    approveApplication(appId);
+    
+    // Close the confirmation modal after a short delay
+    setTimeout(() => {
+        const approveModal = bootstrap.Modal.getInstance(document.getElementById('approveConfirmModal'));
+        if (approveModal) approveModal.hide();
+        
+        // Reset button state
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-check me-1"></i>Yes, Approve';
+            confirmBtn.classList.remove('loading');
+        }
+    }, 500);
 }
 
 function approveApplication(applicationId) {
@@ -2833,6 +3195,7 @@ window.exportAccountTransactions = exportAccountTransactions;
 window.loadPendingApplications = loadPendingApplications;
 window.viewApplicationDetails = viewApplicationDetails;
 window.confirmApproveApplication = confirmApproveApplication;
+window.executeApproveApplication = executeApproveApplication;
 window.showDeclineReasonModal = showDeclineReasonModal;
 window.submitDeclineApplication = submitDeclineApplication;
 window.applyApplicationFilter = applyApplicationFilter;
