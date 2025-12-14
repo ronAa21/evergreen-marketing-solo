@@ -378,39 +378,6 @@
                         'voided': 'status-voided'
                     }[trans.status] || 'badge-secondary';
                     
-                    // Build journal lines table
-                    let linesHtml = '';
-                    if (trans.lines && trans.lines.length > 0) {
-                        let totalDebit = 0;
-                        let totalCredit = 0;
-                        
-                        trans.lines.forEach(line => {
-                            totalDebit += parseFloat(line.debit_amount || 0);
-                            totalCredit += parseFloat(line.credit_amount || 0);
-                            
-                            linesHtml += `
-                                <tr>
-                                    <td>${line.account_code}</td>
-                                    <td>${line.account_name}</td>
-                                    <td class="text-end">${parseFloat(line.debit_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                    <td class="text-end">${parseFloat(line.credit_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                    <td>${line.description || '-'}</td>
-                                </tr>
-                            `;
-                        });
-                        
-                        linesHtml += `
-                            <tr class="table-light fw-bold">
-                                <td colspan="2" class="text-end">Total:</td>
-                                <td class="text-end">${totalDebit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td class="text-end">${totalCredit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td></td>
-                            </tr>
-                        `;
-                    } else {
-                        linesHtml = '<tr><td colspan="5" class="text-center text-muted">No journal lines found</td></tr>';
-                    }
-                    
                     modalBody.innerHTML = `
                         <div class="row mb-3">
                             <div class="col-md-6">
@@ -461,26 +428,6 @@
                                 <p class="mb-0">${trans.description}</p>
                             </div>
                         ` : ''}
-                        
-                        <div class="mt-4">
-                            <h6 class="text-primary mb-3"><i class="fas fa-list me-2"></i>Journal Entries</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Account Code</th>
-                                            <th>Account Name</th>
-                                            <th class="text-end">Debit</th>
-                                            <th class="text-end">Credit</th>
-                                            <th>Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${linesHtml}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
                     `;
                 } else {
                     modalBody.innerHTML = `

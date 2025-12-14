@@ -282,7 +282,6 @@ try {
                 <div class="dropdown d-none d-md-block">
                     <a class="nav-icon-btn" href="#" id="notificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-custom notifications-dropdown" aria-labelledby="notificationsDropdown">
                         <li class="dropdown-header">Notifications</li>
@@ -400,45 +399,17 @@ try {
             <div class="card-body">
                 <form method="GET" action="" id="filterForm">
                     <div class="row g-3">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="date_from" class="form-label">Date From</label>
                             <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($filter_date_from); ?>">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="date_to" class="form-label">Date To</label>
                             <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($filter_date_to); ?>">
                         </div>
-                        <div class="col-md-2">
-                            <label for="type" class="form-label">Transaction Type</label>
-                            <select class="form-select" id="type" name="type">
-                                <option value="">All Types</option>
-                                <option value="GJ" <?php echo $filter_type === 'GJ' ? 'selected' : ''; ?>>General Journal</option>
-                                <option value="CR" <?php echo $filter_type === 'CR' ? 'selected' : ''; ?>>Cash Receipt</option>
-                                <option value="CD" <?php echo $filter_type === 'CD' ? 'selected' : ''; ?>>Cash Disbursement</option>
-                                <option value="PR" <?php echo $filter_type === 'PR' ? 'selected' : ''; ?>>Payroll</option>
-                                <option value="AP" <?php echo $filter_type === 'AP' ? 'selected' : ''; ?>>Accounts Payable</option>
-                                <option value="AR" <?php echo $filter_type === 'AR' ? 'selected' : ''; ?>>Accounts Receivable</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="status" class="form-label">Status</label>
-                            <select class="form-select" id="status" name="status">
-                                <option value="">All Status</option>
-                                <option value="draft" <?php echo $filter_status === 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                <option value="posted" <?php echo $filter_status === 'posted' ? 'selected' : ''; ?>>Posted</option>
-                                <option value="reversed" <?php echo $filter_status === 'reversed' ? 'selected' : ''; ?>>Reversed</option>
-                                <option value="voided" <?php echo $filter_status === 'voided' ? 'selected' : ''; ?>>Voided</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="account" class="form-label">Account Number</label>
-                            <input type="text" class="form-control" id="account" name="account" placeholder="e.g., 1001" value="<?php echo htmlspecialchars($filter_account); ?>">
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-12 text-end">
+                        <div class="col-md-4 d-flex align-items-end gap-2">
                             <button type="button" class="btn btn-secondary" onclick="clearFilters()">
-                                <i class="fas fa-times me-1"></i>Clear Filters
+                                <i class="fas fa-times me-1"></i>Clear
                             </button>
                             <button type="submit" name="apply_filters" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i>Apply Filters
