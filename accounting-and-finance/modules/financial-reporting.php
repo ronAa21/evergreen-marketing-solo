@@ -467,9 +467,12 @@ $current_user = getCurrentUser();
                                 <?php 
                                 // ============================================
                                 // TRIAL BALANCE - Matches API exactly
+                                // API includes: Deposits, Transfers In, Interest, Loan Disbursements, Rewards (as debits)
+                                // API includes: Withdrawals, Transfers Out, Fees, Loan Payments (as credits)
+                                // API does NOT include payroll in trial balance
                                 // ============================================
                                 
-                                // DEBITS: Deposits, Transfers In, Interest, Loan Disbursements, Rewards, Missions, Payroll
+                                // DEBITS: Deposits, Transfers In, Interest, Loan Disbursements, Rewards
                                 $total_debits = 0;
                                 if ($deposits > 0) $total_debits += $deposits;
                                 if ($transfers_in > 0) $total_debits += $transfers_in;
@@ -477,7 +480,7 @@ $current_user = getCurrentUser();
                                 if ($loan_disbursed > 0) $total_debits += $loan_disbursed;
                                 if ($rewards_exp > 0) $total_debits += $rewards_exp;
                                 if ($missions_exp > 0) $total_debits += $missions_exp;
-                                if ($payroll_exp > 0) $total_debits += $payroll_exp;
+                                // Note: Payroll is NOT included in API trial balance
                                 
                                 // CREDITS: Withdrawals, Transfers Out, Fees, Loan Payments
                                 $total_credits = 0;
