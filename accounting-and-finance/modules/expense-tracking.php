@@ -695,10 +695,10 @@ if ($conn->query("SHOW TABLES LIKE 'expense_categories'")->num_rows > 0) {
                                     <th>Employee</th>
                                     <th>Category</th>
                                     <th>Account</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
+                                    <th style="text-align: right;">Amount</th>
+                                    <th style="text-align: center;">Status</th>
                                     <th>Description</th>
-                                    <th>Actions</th>
+                                    <th style="text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>

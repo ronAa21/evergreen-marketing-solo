@@ -720,7 +720,7 @@ if (!empty($status) && $applyFilters) {
             </div>
         </div>
         
-        <div class="container">
+        <div class="container-fluid px-4">
         
         <!-- Statistics Cards -->
         <div class="row g-3 mb-4">
@@ -897,18 +897,18 @@ if (!empty($status) && $applyFilters) {
                     <table id="loanTable" class="table table-hover table-striped">
                         <thead class="table-light">
                             <tr>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Type</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Loan No.</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Borrower/Applicant</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Loan Type</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Start/Applied Date</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Maturity Date</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Loan Amount</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Interest Rate</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Monthly Payment</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Outstanding</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Status</th>
-                                <th style="background-color: #f8f9fa; color: #0A3D3D; font-weight: 600;">Actions</th>
+                                <th>Type</th>
+                                <th>Loan No.</th>
+                                <th>Borrower/Applicant</th>
+                                <th>Loan Type</th>
+                                <th>Start Date</th>
+                                <th>Maturity</th>
+                                <th>Loan Amount</th>
+                                <th>Rate</th>
+                                <th>Monthly</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -923,13 +923,12 @@ if (!empty($status) && $applyFilters) {
                                 </td>
                                 <td><strong><?php echo htmlspecialchars($loan['loan_number']); ?></strong></td>
                                 <td>
-                                    <?php echo htmlspecialchars($loan['borrower_name']); ?>
-                                    <?php if ($loan['record_type'] === 'application' && !empty($loan['contact_number'])): ?>
-                                        <br><small class="text-muted"><i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($loan['contact_number']); ?></small>
-                                    <?php endif; ?>
-                                    <?php if ($loan['record_type'] === 'application' && !empty($loan['email'])): ?>
-                                        <br><small class="text-muted"><i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($loan['email']); ?></small>
-                                    <?php endif; ?>
+                                    <span title="<?php echo htmlspecialchars($loan['borrower_name']); ?><?php if (!empty($loan['contact_number'])) echo ' | ' . htmlspecialchars($loan['contact_number']); ?><?php if (!empty($loan['email'])) echo ' | ' . htmlspecialchars($loan['email']); ?>">
+                                        <?php echo htmlspecialchars($loan['borrower_name']); ?>
+                                        <?php if ($loan['record_type'] === 'application' && !empty($loan['contact_number'])): ?>
+                                            <br><small class="text-muted"><?php echo htmlspecialchars($loan['contact_number']); ?></small>
+                                        <?php endif; ?>
+                                    </span>
                                 </td>
                                 <td><?php echo htmlspecialchars($loan['loan_type_name'] ?? 'N/A'); ?></td>
                                 <td><?php echo date('M d, Y', strtotime($loan['start_date'])); ?></td>

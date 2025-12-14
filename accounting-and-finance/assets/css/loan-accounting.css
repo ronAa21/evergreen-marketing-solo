@@ -267,19 +267,19 @@
 /* Stats Cards */
 .stat-card {
     background: #fff;
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    border-radius: 10px;
+    padding: 15px 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     display: flex;
     align-items: center;
-    gap: 20px;
-    transition: all 0.3s ease;
+    gap: 15px;
+    transition: all 0.2s ease;
     border-left: 4px solid;
 }
 
 .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .stat-card-primary {
@@ -299,13 +299,13 @@
 }
 
 .stat-icon {
-    width: 60px;
-    height: 60px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
+    font-size: 20px;
     color: #fff;
 }
 
@@ -326,16 +326,20 @@
 }
 
 .stat-content h3 {
-    font-size: 32px;
+    font-size: 24px;
     font-weight: 700;
     color: #0A3D3D;
-    margin: 0 0 5px 0;
+    margin: 0 0 3px 0;
 }
 
 .stat-content p {
     margin: 0;
     color: #666;
-    font-size: 14px;
+    font-size: 12px;
+}
+
+.stat-content small {
+    font-size: 11px;
 }
 
 /* Filter Panel */
@@ -365,11 +369,13 @@
 
 .table thead th {
     font-weight: 600;
-    font-size: 13px;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    letter-spacing: 0.3px;
     border-bottom: 2px solid #0A3D3D;
     background-color: #f8f9fa;
     color: #0A3D3D;
+    padding: 0.6rem 0.5rem;
+    white-space: nowrap;
 }
 
 .table-light thead th {
@@ -382,13 +388,53 @@
     background: linear-gradient(135deg, #0A3D3D, #165A5A);
 }
 
+/* Compact table cells */
+.table tbody td {
+    padding: 0.5rem 0.5rem;
+    font-size: 12px;
+    vertical-align: middle;
+}
+
+/* Full width container for loan table */
+#loanTable {
+    width: 100%;
+    table-layout: auto;
+}
+
+/* Column width optimization */
+#loanTable th:nth-child(1),
+#loanTable td:nth-child(1) { width: 7%; } /* Type */
+#loanTable th:nth-child(2),
+#loanTable td:nth-child(2) { width: 7%; } /* Loan No */
+#loanTable th:nth-child(3),
+#loanTable td:nth-child(3) { width: 14%; } /* Borrower */
+#loanTable th:nth-child(4),
+#loanTable td:nth-child(4) { width: 9%; } /* Loan Type */
+#loanTable th:nth-child(5),
+#loanTable td:nth-child(5) { width: 8%; } /* Start Date */
+#loanTable th:nth-child(6),
+#loanTable td:nth-child(6) { width: 8%; } /* Maturity Date */
+#loanTable th:nth-child(7),
+#loanTable td:nth-child(7) { width: 10%; text-align: right; } /* Loan Amount */
+#loanTable th:nth-child(8),
+#loanTable td:nth-child(8) { width: 6%; text-align: center; } /* Interest Rate */
+#loanTable th:nth-child(9),
+#loanTable td:nth-child(9) { width: 10%; text-align: right; } /* Monthly Payment */
+#loanTable th:nth-child(10),
+#loanTable td:nth-child(10) { width: 10%; text-align: right; } /* Outstanding */
+#loanTable th:nth-child(11),
+#loanTable td:nth-child(11) { width: 7%; text-align: center; } /* Status */
+#loanTable th:nth-child(12),
+#loanTable td:nth-child(12) { width: 6%; text-align: center; } /* Actions */
+
 /* Status Badges */
 .badge {
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .status-pending {
@@ -469,14 +515,19 @@
 
 /* Action Buttons */
 .btn-action {
-    padding: 5px 12px;
-    font-size: 12px;
-    border-radius: 5px;
-    transition: all 0.3s;
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    transition: all 0.2s;
 }
 
 .btn-action:hover {
-    transform: scale(1.05);
+    transform: scale(1.02);
+}
+
+.btn-group-sm .btn-action {
+    padding: 2px 6px;
+    font-size: 10px;
 }
 
 /* Card Styles */
@@ -489,11 +540,16 @@
 
 .card-header {
     border-bottom: 1px solid rgba(0,0,0,0.05);
-    padding: 15px 20px;
+    padding: 12px 15px;
 }
 
 .card-body {
-    padding: 20px;
+    padding: 15px;
+}
+
+.card-header h5 {
+    font-size: 14px;
+    margin: 0;
 }
 
 /* Empty State */
@@ -988,3 +1044,97 @@
     color: #721c24;
 }
 
+
+
+/* ========================================
+   SPACE OPTIMIZATION - COMPACT TABLE VIEW
+   ======================================== */
+
+/* Borrower column - compact display */
+#loanTable td:nth-child(3) {
+    max-width: 180px;
+}
+
+#loanTable td:nth-child(3) span {
+    display: block;
+    line-height: 1.3;
+}
+
+#loanTable td:nth-child(3) small {
+    font-size: 10px;
+    color: #666;
+}
+
+/* Compact badge in Type column */
+#loanTable .badge {
+    font-size: 9px;
+    padding: 2px 6px;
+}
+
+#loanTable .badge i {
+    font-size: 8px;
+}
+
+/* Amount columns - right aligned and compact */
+#loanTable td.text-end {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* Date columns - compact */
+#loanTable td:nth-child(5),
+#loanTable td:nth-child(6) {
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* Loan type column */
+#loanTable td:nth-child(4) {
+    font-size: 11px;
+}
+
+/* Action buttons - more compact */
+#loanTable .btn-group {
+    gap: 2px;
+}
+
+/* Row height optimization */
+#loanTable tbody tr {
+    height: auto;
+}
+
+/* Remove extra spacing */
+.table-responsive {
+    margin: 0;
+}
+
+/* Compact filter panel */
+#filterPanel .card-body {
+    padding: 12px 15px;
+}
+
+#filterPanel .form-label {
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+#filterPanel .form-control,
+#filterPanel .form-select {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+/* Compact action buttons row */
+.card-body .d-flex.justify-content-between {
+    padding: 0;
+}
+
+.card-body .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.card-body .btn i {
+    font-size: 11px;
+}
