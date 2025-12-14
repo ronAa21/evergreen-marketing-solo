@@ -203,81 +203,95 @@ $current_user = getCurrentUser();
                             <div class="report-summary">
                                 <?php 
                                 // ============================================
-                                // COMPREHENSIVE BALANCE SHEET CALCULATION
-                                // Aggregates data from all Evergreen subsystems:
-                                // - Bank System: customer_accounts, bank_accounts
-                                // - Loan Subsystem: loan_applications, bank_transactions
-                                // - HRIS-SIA: contract salaries
+                                // BALANCE SHEET CALCULATION - Matches API exactly
                                 // ============================================
                                 
-                                // Start with zero assets (no accounting database tables used)
+                                // ASSETS: Cash (Deposits - Withdrawals) + Net Transfers + Loans Receivable + Interest + Fees
                                 $assets = 0;
+                                $deposits = 0;
+                                $withdrawals = 0;
+                                $transfers_in = 0;
+                                $transfers_out = 0;
+                                $interest_income = 0;
+                                $fees_collected = 0;
                                 
-                                // Get bank customer account balances as assets
-                                if ($conn->query("SHOW TABLES LIKE 'customer_accounts'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(ca.balance), 0) as bank_balances
-                                        FROM customer_accounts ca
-                                        WHERE ca.is_locked = 0
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $bank_data = $result->fetch_assoc();
-                                        $bank_balances = $bank_data ? ($bank_data['bank_balances'] ?? 0) : 0;
-                                        $assets += $bank_balances;
-                                    }
-                                }
-                                
-                                // Add bank account balances (if exists)
-                                if ($conn->query("SHOW TABLES LIKE 'bank_accounts'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(current_balance), 0) as bank_accounts_balance
-                                        FROM bank_accounts
-                                        WHERE is_active = 1
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $bank_accounts_data = $result->fetch_assoc();
-                                        $bank_accounts_balance = $bank_accounts_data ? ($bank_accounts_data['bank_accounts_balance'] ?? 0) : 0;
-                                        $assets += $bank_accounts_balance;
-                                    }
-                                }
-                                
-                                // Start with zero liabilities (no accounting database tables used)
-                                $liabilities = 0;
-                                
-                                // Get outstanding loan balances as liabilities
-                                // Get approved loans from loan_applications (loan amount minus payments)
-                                if ($conn->query("SHOW TABLES LIKE 'loan_applications'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(loan_amount), 0) as total_loans
-                                        FROM loan_applications
-                                        WHERE status IN ('Approved', 'Active', 'Disbursed')
-                                    ");
-                                    $total_loans = 0;
-                                    if ($result && $result !== false) {
-                                        $loans_data = $result->fetch_assoc();
-                                        $total_loans = $loans_data ? ($loans_data['total_loans'] ?? 0) : 0;
-                                    }
+                                if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0 &&
+                                    $conn->query("SHOW TABLES LIKE 'transaction_types'")->num_rows > 0) {
+                                    // Deposits
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Deposit'");
+                                    if ($result) { $row = $result->fetch_assoc(); $deposits = floatval($row['total'] ?? 0); }
                                     
-                                    // Subtract loan payments made (from bank_transactions where transaction_type_id = loan payment)
-                                    $loan_payments = 0;
-                                    if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0 && 
-                                        $conn->query("SHOW TABLES LIKE 'transaction_types'")->num_rows > 0) {
-                                        $result = $conn->query("
-                                            SELECT COALESCE(SUM(amount), 0) as loan_payments
-                                            FROM bank_transactions bt
-                                            INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                            WHERE tt.type_name LIKE '%loan%payment%' OR bt.description LIKE '%loan%payment%'
-                                        ");
-                                        if ($result && $result !== false) {
-                                            $payments_data = $result->fetch_assoc();
-                                            $loan_payments = $payments_data ? ($payments_data['loan_payments'] ?? 0) : 0;
-                                        }
-                                    }
-                                    $liabilities += ($total_loans - $loan_payments);
+                                    // Withdrawals
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Withdrawal'");
+                                    if ($result) { $row = $result->fetch_assoc(); $withdrawals = floatval($row['total'] ?? 0); }
+                                    
+                                    // Transfers In
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Transfer In'");
+                                    if ($result) { $row = $result->fetch_assoc(); $transfers_in = floatval($row['total'] ?? 0); }
+                                    
+                                    // Transfers Out
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Transfer Out'");
+                                    if ($result) { $row = $result->fetch_assoc(); $transfers_out = floatval($row['total'] ?? 0); }
+                                    
+                                    // Interest Income
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Interest Payment'");
+                                    if ($result) { $row = $result->fetch_assoc(); $interest_income = floatval($row['total'] ?? 0); }
+                                    
+                                    // Fees
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Fee'");
+                                    if ($result) { $row = $result->fetch_assoc(); $fees_collected = floatval($row['total'] ?? 0); }
                                 }
                                 
-                                // Calculate equity = Assets - Liabilities
-                                // (No accounting database equity table used)
+                                // Loans Receivable
+                                $loan_disbursed = 0;
+                                $loan_payments_total = 0;
+                                if ($conn->query("SHOW TABLES LIKE 'loan_applications'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(loan_amount), 0) as total FROM loan_applications WHERE status IN ('Approved', 'Active', 'Disbursed')");
+                                    if ($result) { $row = $result->fetch_assoc(); $loan_disbursed = floatval($row['total'] ?? 0); }
+                                }
+                                if ($conn->query("SHOW TABLES LIKE 'loan_payments'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM loan_payments");
+                                    if ($result) { $row = $result->fetch_assoc(); $loan_payments_total = floatval($row['total'] ?? 0); }
+                                }
+                                // Add loan payments from bank_transactions
+                                if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(bt.amount), 0) as total FROM bank_transactions bt INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id WHERE tt.type_name = 'Loan Payment'");
+                                    if ($result) { $row = $result->fetch_assoc(); $loan_payments_total += floatval($row['total'] ?? 0); }
+                                }
+                                
+                                $cash_net = $deposits - $withdrawals;
+                                $transfers_net = $transfers_in - $transfers_out;
+                                $loans_receivable = $loan_disbursed - $loan_payments_total;
+                                
+                                if ($cash_net != 0) $assets += $cash_net;
+                                if ($transfers_net != 0) $assets += $transfers_net;
+                                if ($loans_receivable > 0) $assets += $loans_receivable;
+                                if ($interest_income > 0) $assets += $interest_income;
+                                if ($fees_collected > 0) $assets += $fees_collected;
+                                
+                                // LIABILITIES: Customer Deposits Payable + Rewards + Missions + Payroll
+                                $liabilities = 0;
+                                if ($deposits > 0) $liabilities += $deposits;
+                                
+                                // Rewards Points Liability
+                                if ($conn->query("SHOW TABLES LIKE 'points_history'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(points), 0) as total FROM points_history");
+                                    if ($result) { $row = $result->fetch_assoc(); $liabilities += floatval($row['total'] ?? 0) * 0.01; }
+                                }
+                                
+                                // Missions Liability
+                                if ($conn->query("SHOW TABLES LIKE 'user_missions'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(points_earned), 0) as total FROM user_missions WHERE status = 'completed'");
+                                    if ($result) { $row = $result->fetch_assoc(); $liabilities += floatval($row['total'] ?? 0) * 0.01; }
+                                }
+                                
+                                // Payroll Expenses
+                                if ($conn->query("SHOW TABLES LIKE 'payroll_runs'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(total_net), 0) as total FROM payroll_runs WHERE status IN ('completed', 'finalized')");
+                                    if ($result) { $row = $result->fetch_assoc(); $liabilities += floatval($row['total'] ?? 0); }
+                                }
+                                
+                                // EQUITY = Assets - Liabilities
                                 $equity = $assets - $liabilities;
                                 ?>
                                 <div class="summary-item">
@@ -318,63 +332,48 @@ $current_user = getCurrentUser();
                             <div class="report-summary">
                                 <?php 
                                 // ============================================
-                                // COMPREHENSIVE INCOME STATEMENT CALCULATION
-                                // Aggregates revenue and expenses from:
-                                // - Bank System: bank_transactions (interest income, deposits)
-                                // - Loan Subsystem: loan_applications (loan interest)
-                                // - HRIS/Payroll: payroll_runs (payroll expenses)
+                                // INCOME STATEMENT - Matches API generateIncomeStatement() exactly
+                                // Revenue: Loan Interest + Loan Payments + Deposits + Transfers In
+                                // Expenses: Withdrawals + Transfers Out + Loan Disbursements + Rewards
+                                // Note: API doesn't include Payroll in Income Statement expenses
                                 // ============================================
                                 
-                                // Start with zero revenue (no accounting database tables used)
+                                // REVENUE
                                 $revenue = 0;
+                                // Loan Interest Income (15% annual rate / 12 months)
+                                $loan_interest_rev = $loan_disbursed * 0.15 / 12;
+                                if ($loan_interest_rev > 0) $revenue += $loan_interest_rev;
+                                if ($loan_payments_total > 0) $revenue += $loan_payments_total;
+                                if ($deposits > 0) $revenue += $deposits;
+                                if ($transfers_in > 0) $revenue += $transfers_in;
                                 
-                                // Get bank interest income (from interest applied to accounts)
-                                if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0 && 
-                                    $conn->query("SHOW TABLES LIKE 'transaction_types'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(bt.amount), 0) as interest_income
-                                        FROM bank_transactions bt
-                                        INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                        WHERE tt.type_name LIKE '%interest%' OR bt.description LIKE '%interest%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $interest_data = $result->fetch_assoc();
-                                        $interest_income = $interest_data ? ($interest_data['interest_income'] ?? 0) : 0;
-                                        $revenue += $interest_income;
-                                    }
-                                }
-                                
-                                // Add loan interest income (from loan payments - portion that is interest)
-                                if ($conn->query("SHOW TABLES LIKE 'loan_applications'")->num_rows > 0) {
-                                    // Estimate interest from loan payments (20% annual rate on loans)
-                                    // This is a simplified calculation - actual interest should be tracked separately
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(loan_amount * 0.20 / 12), 0) as estimated_loan_interest
-                                        FROM loan_applications
-                                        WHERE status IN ('Approved', 'Active', 'Disbursed')
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $loan_interest_data = $result->fetch_assoc();
-                                        $loan_interest = $loan_interest_data ? ($loan_interest_data['estimated_loan_interest'] ?? 0) : 0;
-                                        $revenue += $loan_interest;
-                                    }
-                                }
-                                
-                                // Start with zero expenses (no accounting database tables used)
+                                // EXPENSES (matching API - no payroll)
                                 $expenses = 0;
+                                if ($withdrawals > 0) $expenses += $withdrawals;
+                                if ($transfers_out > 0) $expenses += $transfers_out;
+                                if ($loan_disbursed > 0) $expenses += $loan_disbursed;
                                 
-                                // Get payroll expenses from payroll_runs (HRIS integration)
+                                // Rewards expense
+                                $rewards_exp = 0;
+                                if ($conn->query("SHOW TABLES LIKE 'points_history'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(points), 0) as total FROM points_history");
+                                    if ($result) { $row = $result->fetch_assoc(); $rewards_exp = floatval($row['total'] ?? 0) * 0.01; }
+                                }
+                                if ($rewards_exp > 0) $expenses += $rewards_exp;
+                                
+                                // Missions expense
+                                $missions_exp = 0;
+                                if ($conn->query("SHOW TABLES LIKE 'user_missions'")->num_rows > 0) {
+                                    $result = $conn->query("SELECT COALESCE(SUM(points_earned), 0) as total FROM user_missions WHERE status = 'completed'");
+                                    if ($result) { $row = $result->fetch_assoc(); $missions_exp = floatval($row['total'] ?? 0) * 0.01; }
+                                }
+                                if ($missions_exp > 0) $expenses += $missions_exp;
+                                
+                                // Payroll expense (for Trial Balance only, not Income Statement per API)
+                                $payroll_exp = 0;
                                 if ($conn->query("SHOW TABLES LIKE 'payroll_runs'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(total_net), 0) as payroll_expenses
-                                        FROM payroll_runs
-                                        WHERE status IN ('completed', 'finalized')
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $payroll_data = $result->fetch_assoc();
-                                        $payroll_expenses = $payroll_data ? ($payroll_data['payroll_expenses'] ?? 0) : 0;
-                                        $expenses += $payroll_expenses;
-                                    }
+                                    $result = $conn->query("SELECT COALESCE(SUM(total_net), 0) as total FROM payroll_runs WHERE status IN ('completed', 'finalized')");
+                                    if ($result) { $row = $result->fetch_assoc(); $payroll_exp = floatval($row['total'] ?? 0); }
                                 }
                                 
                                 $net_income = $revenue - $expenses;
@@ -417,88 +416,17 @@ $current_user = getCurrentUser();
                             <div class="report-summary">
                                 <?php 
                                 // ============================================
-                                // COMPREHENSIVE CASH FLOW STATEMENT
-                                // Tracks cash movements across all subsystems:
-                                // - Bank System: customer_accounts, bank_accounts, bank_transactions
-                                // - Loan Subsystem: loan disbursements/payments
+                                // CASH FLOW STATEMENT - Matches API exactly
                                 // ============================================
                                 
-                                // Start with zero cash balance (no accounting database tables used)
-                                $cash_balance = 0;
+                                // Cash Balance = Total Deposits (same as API summary.total_deposits)
+                                $cash_balance = $deposits;
                                 
-                                // Get bank customer account balances
-                                if ($conn->query("SHOW TABLES LIKE 'customer_accounts'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(ca.balance), 0) as bank_balances
-                                        FROM customer_accounts ca
-                                        WHERE ca.is_locked = 0
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $bank_data = $result->fetch_assoc();
-                                        $bank_balances = $bank_data ? ($bank_data['bank_balances'] ?? 0) : 0;
-                                        $cash_balance += $bank_balances;
-                                    }
-                                }
+                                // Operating = Deposits - Withdrawals + Transfers In - Transfers Out + Interest + Fees
+                                $operating_cash = $deposits - $withdrawals + $transfers_in - $transfers_out + $interest_income + $fees_collected;
                                 
-                                // Add bank account balances
-                                if ($conn->query("SHOW TABLES LIKE 'bank_accounts'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(current_balance), 0) as bank_accounts_balance
-                                        FROM bank_accounts
-                                        WHERE is_active = 1
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $bank_accounts_data = $result->fetch_assoc();
-                                        $bank_accounts_balance = $bank_accounts_data ? ($bank_accounts_data['bank_accounts_balance'] ?? 0) : 0;
-                                        $cash_balance += $bank_accounts_balance;
-                                    }
-                                }
-                                
-                                // Calculate operating cash flow (deposits - withdrawals)
-                                $operating_cash = 0;
-                                $loan_disbursements = 0;
-                                
-                                if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0 && 
-                                    $conn->query("SHOW TABLES LIKE 'transaction_types'")->num_rows > 0) {
-                                    // Deposits (inflow)
-                                    $deposits = 0;
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(bt.amount), 0) as deposits
-                                        FROM bank_transactions bt
-                                        INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                        WHERE tt.type_name LIKE '%deposit%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $deposits_data = $result->fetch_assoc();
-                                        $deposits = $deposits_data ? ($deposits_data['deposits'] ?? 0) : 0;
-                                    }
-                                    
-                                    // Withdrawals (outflow)
-                                    $withdrawals = 0;
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(bt.amount), 0) as withdrawals
-                                        FROM bank_transactions bt
-                                        INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                        WHERE tt.type_name LIKE '%withdrawal%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $withdrawals_data = $result->fetch_assoc();
-                                        $withdrawals = $withdrawals_data ? ($withdrawals_data['withdrawals'] ?? 0) : 0;
-                                    }
-                                    
-                                    $operating_cash = $deposits - $withdrawals;
-                                    
-                                    // Loan disbursements (financing outflow)
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(bt.amount), 0) as disbursements
-                                        FROM bank_transactions bt
-                                        WHERE bt.description LIKE '%loan%disbursement%' OR bt.description LIKE '%loan%disbursed%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $disbursements_data = $result->fetch_assoc();
-                                        $loan_disbursements = $disbursements_data ? ($disbursements_data['disbursements'] ?? 0) : 0;
-                                    }
-                                }
+                                // Financing = Loan Payments Received - Loan Disbursements
+                                $financing_cash = $loan_payments_total - $loan_disbursed;
                                 ?>
                                 <div class="summary-item">
                                     <span class="summary-label">Cash Balance</span>
@@ -510,7 +438,7 @@ $current_user = getCurrentUser();
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Financing</span>
-                                    <span class="summary-value text-warning">₱<?php echo number_format(-$loan_disbursements, 0); ?></span>
+                                    <span class="summary-value <?php echo $financing_cash >= 0 ? 'text-success' : 'text-danger'; ?>">₱<?php echo number_format($financing_cash, 0); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -538,73 +466,33 @@ $current_user = getCurrentUser();
                             <div class="report-summary">
                                 <?php 
                                 // ============================================
-                                // COMPREHENSIVE TRIAL BALANCE
-                                // Combines all financial transactions from:
-                                // - Bank System: bank_transactions
-                                // - Loan Subsystem: loan disbursements
-                                // - HRIS/Payroll: payroll_runs
-                                // (No accounting database journal entries used)
+                                // TRIAL BALANCE - Matches API exactly
                                 // ============================================
                                 
-                                // Start with zero totals (no accounting database tables used)
+                                // DEBITS: Deposits, Transfers In, Interest, Loan Disbursements, Rewards, Missions, Payroll
                                 $total_debits = 0;
+                                if ($deposits > 0) $total_debits += $deposits;
+                                if ($transfers_in > 0) $total_debits += $transfers_in;
+                                if ($interest_income > 0) $total_debits += $interest_income;
+                                if ($loan_disbursed > 0) $total_debits += $loan_disbursed;
+                                if ($rewards_exp > 0) $total_debits += $rewards_exp;
+                                if ($missions_exp > 0) $total_debits += $missions_exp;
+                                if ($payroll_exp > 0) $total_debits += $payroll_exp;
+                                
+                                // CREDITS: Withdrawals, Transfers Out, Fees, Loan Payments
                                 $total_credits = 0;
+                                if ($withdrawals > 0) $total_credits += $withdrawals;
+                                if ($transfers_out > 0) $total_credits += $transfers_out;
+                                if ($fees_collected > 0) $total_credits += $fees_collected;
+                                if ($loan_payments_total > 0) $total_credits += $loan_payments_total;
                                 
-                                // Get bank transactions as debits/credits
-                                if ($conn->query("SHOW TABLES LIKE 'bank_transactions'")->num_rows > 0 && 
-                                    $conn->query("SHOW TABLES LIKE 'transaction_types'")->num_rows > 0) {
-                                    // Deposits increase assets (debit)
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(amount), 0) as deposit_debits
-                                        FROM bank_transactions bt
-                                        INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                        WHERE tt.type_name LIKE '%deposit%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $deposits_data = $result->fetch_assoc();
-                                        $deposit_debits = $deposits_data ? ($deposits_data['deposit_debits'] ?? 0) : 0;
-                                        $total_debits += $deposit_debits;
-                                    }
-                                    
-                                    // Withdrawals decrease assets (credit)
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(amount), 0) as withdrawal_credits
-                                        FROM bank_transactions bt
-                                        INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
-                                        WHERE tt.type_name LIKE '%withdrawal%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $withdrawals_data = $result->fetch_assoc();
-                                        $withdrawal_credits = $withdrawals_data ? ($withdrawals_data['withdrawal_credits'] ?? 0) : 0;
-                                        $total_credits += $withdrawal_credits;
-                                    }
-                                    
-                                    // Loan disbursements: debit cash (asset), credit loan payable (liability)
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(amount), 0) as loan_amounts
-                                        FROM bank_transactions
-                                        WHERE description LIKE '%loan%disbursement%' OR description LIKE '%loan%disbursed%'
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $loans_data = $result->fetch_assoc();
-                                        $loan_amounts = $loans_data ? ($loans_data['loan_amounts'] ?? 0) : 0;
-                                        $total_debits += $loan_amounts;
-                                        $total_credits += $loan_amounts;
-                                    }
-                                }
-                                
-                                // Add payroll expenses
-                                if ($conn->query("SHOW TABLES LIKE 'payroll_runs'")->num_rows > 0) {
-                                    $result = $conn->query("
-                                        SELECT COALESCE(SUM(total_net), 0) as payroll_amount
-                                        FROM payroll_runs
-                                        WHERE status IN ('completed', 'finalized')
-                                    ");
-                                    if ($result && $result !== false) {
-                                        $payroll_data = $result->fetch_assoc();
-                                        $payroll_amount = $payroll_data ? ($payroll_data['payroll_amount'] ?? 0) : 0;
-                                        $total_debits += $payroll_amount; // Expense = debit
-                                        $total_credits += $payroll_amount; // Cash/liability = credit
+                                // Balancing entry - Retained Earnings
+                                $difference = $total_debits - $total_credits;
+                                if (abs($difference) > 0.01) {
+                                    if ($difference > 0) {
+                                        $total_credits += $difference;
+                                    } else {
+                                        $total_debits += abs($difference);
                                     }
                                 }
                                 
