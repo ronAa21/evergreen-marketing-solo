@@ -890,6 +890,14 @@ if ($selected_employee) {
         $attendance_summary = $attendance_payroll_adjustments['attendance_summary'];
     }
 }
+
+// Flag to check if employee has actual attendance/payroll data for the selected period
+// This is used to determine whether to show computed values or blank in Tax Management and Overall tabs
+$has_attendance_data = false;
+if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['attendance_summary'])) {
+    // Check if there are any actual attendance records (total_days > 0)
+    $has_attendance_data = ($attendance_payroll_adjustments['attendance_summary']['total_days'] > 0);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1524,6 +1532,7 @@ if ($selected_employee) {
                                     <!-- Payroll Impact Card -->
                                     <?php if ($attendance_payroll_adjustments): 
                                         $adj = $attendance_payroll_adjustments['salary_adjustments'];
+                                        $att_summary = $attendance_payroll_adjustments['attendance_summary'];
                                         $has_impact = $adj['absent_deduction'] > 0 || $adj['half_day_deduction'] > 0 || $adj['late_penalty'] > 0 || $adj['overtime_pay'] > 0;
                                     ?>
                                     <div class="payroll-impact-card">
@@ -1532,10 +1541,26 @@ if ($selected_employee) {
                                             <span>Payroll Impact</span>
                                         </div>
                                         <div class="payroll-impact-content">
-                                            <?php if (!$has_impact): ?>
+                                            <!-- Always show Present Days Pay (Basic Salary earned) -->
+                                            <?php if ($adj['basic_salary'] > 0): ?>
+                                            <div class="payroll-impact-item">
+                                                <span class="impact-label text-primary">
+                                                    <i class="fas fa-calendar-check me-1"></i>
+                                                    Present Days Pay (<?php echo $att_summary['present_days']; ?> days)
+                                                </span>
+                                                <span class="impact-amount text-primary">₱<?php echo number_format($adj['basic_salary'], 2); ?></span>
+                                            </div>
+                                            <?php endif; ?>
+                                            
+                                            <?php if (!$has_impact && $adj['basic_salary'] > 0): ?>
                                             <div class="payroll-impact-item">
                                                 <i class="fas fa-check-circle text-success"></i>
-                                                <span class="text-success">Perfect attendance - no payroll adjustments</span>
+                                                <span class="text-success">Perfect attendance - no deductions</span>
+                                            </div>
+                                            <?php elseif ($adj['basic_salary'] == 0 && !$has_impact): ?>
+                                            <div class="payroll-impact-item">
+                                                <i class="fas fa-info-circle text-muted"></i>
+                                                <span class="text-muted">No attendance records for this period</span>
                                             </div>
                                             <?php else: ?>
                                                 <?php if ($adj['overtime_pay'] > 0): ?>
@@ -1797,159 +1822,261 @@ if ($selected_employee) {
                 <div class="payroll-content-card">
                     <div class="tax-calculator-container">
                         <?php
-                        // Calculate monthly income (GROSS salary = basic_salary + overtime_pay)
-                        // Use GROSS salary for tax calculations, NOT adjusted_salary (which has deductions)
+                        // ONLY calculate tax values if employee has attendance data for the period
+                        // If no attendance data, show blank/zero values
                         $tax_monthly_income = 0;
+                        $tax_basic_salary = 0;
+                        $tax_sss_contrib = ['employee' => 0, 'employer' => 0];
+                        $tax_philhealth_contrib = ['employee' => 0, 'employer' => 0];
+                        $tax_pagibig_contrib = ['employee' => 0, 'employer' => 0];
+                        $tax_taxable_income = 0;
+                        $tax_income_tax = 0;
+                        $tax_net_pay_after_tax = 0;
+                        $tax_total_contributions = 0;
+                        $tax_total_deductions = 0;
+                        $tax_net_pay_after_deductions = 0;
                         
-                        if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments'])) {
-                            $adj = $attendance_payroll_adjustments['salary_adjustments'];
-                            // Use gross_salary if available, otherwise calculate from basic_salary + overtime_pay
-                            if (isset($adj['gross_salary']) && $adj['gross_salary'] > 0) {
-                                $tax_monthly_income = $adj['gross_salary'];
-                            } else {
-                                $tax_monthly_income = $adj['basic_salary'] + $adj['overtime_pay'];
+                        // Only compute tax values if there's actual attendance data
+                        if ($has_attendance_data) {
+                            // Calculate monthly income (GROSS salary = basic_salary + overtime_pay)
+                            // Use GROSS salary for tax calculations, NOT adjusted_salary (which has deductions)
+                            if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments'])) {
+                                $adj = $attendance_payroll_adjustments['salary_adjustments'];
+                                // Use gross_salary if available, otherwise calculate from basic_salary + overtime_pay
+                                if (isset($adj['gross_salary']) && $adj['gross_salary'] > 0) {
+                                    $tax_monthly_income = $adj['gross_salary'];
+                                } else {
+                                    $tax_monthly_income = $adj['basic_salary'] + $adj['overtime_pay'];
+                                }
                             }
-                        }
-                        
-                        // Fallback to base salary if no attendance adjustments
-                        if ($tax_monthly_income == 0) {
-                            if ($earnings_result && $earnings_result->num_rows > 0) {
-                                        $earnings_result->data_seek(0);
+                            
+                            // Fallback to base salary if no attendance adjustments but has attendance data
+                            if ($tax_monthly_income == 0) {
+                                if ($earnings_result && $earnings_result->num_rows > 0) {
+                                    $earnings_result->data_seek(0);
+                                    while($earning = $earnings_result->fetch_assoc()) {
+                                        if ($earning['code'] === 'BASIC') {
+                                            $tax_monthly_income = floatval($earning['value']);
+                                            break;
+                                        }
+                                    }
+                                    $earnings_result->data_seek(0);
+                                }
+                                
+                                // If still no basic salary found, use position salary
+                                if ($tax_monthly_income == 0) {
+                                    $tax_monthly_income = $position_salary > 0 ? $position_salary : 0;
+                                }
+                            }
+                            
+                            // For tax calculations:
+                            // - Monthly Income (display) = GROSS salary (basic + overtime)
+                            // - Contributions (SSS, PhilHealth, Pag-IBIG) are calculated on BASE monthly salary
+                            // - Withholding Tax is calculated on (GROSS salary - contributions)
+                            
+                            // Get base monthly salary for contribution calculations
+                            $tax_basic_salary = $position_salary > 0 ? $position_salary : 0;
+                            if ($tax_basic_salary == 0 && $earnings_result) {
+                                $earnings_result->data_seek(0);
                                 while($earning = $earnings_result->fetch_assoc()) {
-                                                if ($earning['code'] === 'BASIC') {
-                                        $tax_monthly_income = floatval($earning['value']);
+                                    if ($earning['code'] === 'BASIC') {
+                                        $tax_basic_salary = floatval($earning['value']);
                                         break;
                                     }
                                 }
                                 $earnings_result->data_seek(0);
                             }
                             
-                            // If still no basic salary found, use position salary
-                            if ($tax_monthly_income == 0) {
-                                $tax_monthly_income = $position_salary > 0 ? $position_salary : 0;
+                            // If we have attendance adjustments, get the base salary from there
+                            if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'])) {
+                                $tax_basic_salary = $attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'];
                             }
+                            
+                            // Calculate mandatory contributions using 2025 rates (based on BASE salary)
+                            $tax_sss_contrib = calculateSSSContribution($tax_basic_salary);
+                            $tax_philhealth_contrib = calculatePhilHealthContribution($tax_basic_salary);
+                            $tax_pagibig_contrib = calculatePagIBIGContribution($tax_basic_salary);
+                            
+                            // Calculate taxable income and withholding tax (based on GROSS salary minus contributions)
+                            $tax_taxable_income = $tax_monthly_income - $tax_sss_contrib['employee'] - $tax_philhealth_contrib['employee'] - $tax_pagibig_contrib['employee'];
+                            $tax_income_tax = calculateBIRWithholdingTax($tax_taxable_income);
+                            
+                            // Calculate totals
+                            $tax_net_pay_after_tax = $tax_monthly_income - $tax_income_tax;
+                            $tax_total_contributions = $tax_sss_contrib['employee'] + $tax_philhealth_contrib['employee'] + $tax_pagibig_contrib['employee'];
+                            $tax_total_deductions = $tax_income_tax + $tax_total_contributions;
+                            $tax_net_pay_after_deductions = $tax_monthly_income - $tax_total_deductions;
                         }
-                        
-                        // For tax calculations:
-                        // - Monthly Income (display) = GROSS salary (basic + overtime)
-                        // - Contributions (SSS, PhilHealth, Pag-IBIG) are calculated on BASE monthly salary
-                        // - Withholding Tax is calculated on (GROSS salary - contributions)
-                        
-                        // Get base monthly salary for contribution calculations
-                        $tax_basic_salary = $position_salary > 0 ? $position_salary : 0;
-                        if ($tax_basic_salary == 0 && $earnings_result) {
-                            $earnings_result->data_seek(0);
-                            while($earning = $earnings_result->fetch_assoc()) {
-                                if ($earning['code'] === 'BASIC') {
-                                    $tax_basic_salary = floatval($earning['value']);
-                                    break;
-                                }
-                            }
-                            $earnings_result->data_seek(0);
-                        }
-                        
-                        // If we have attendance adjustments, get the base salary from there
-                        if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'])) {
-                            $tax_basic_salary = $attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'];
-                        }
-                        
-                        // Calculate mandatory contributions using 2025 rates (based on BASE salary)
-                        $tax_sss_contrib = calculateSSSContribution($tax_basic_salary);
-                        $tax_philhealth_contrib = calculatePhilHealthContribution($tax_basic_salary);
-                        $tax_pagibig_contrib = calculatePagIBIGContribution($tax_basic_salary);
-                        
-                        // Calculate taxable income and withholding tax (based on GROSS salary minus contributions)
-                        $tax_taxable_income = $tax_monthly_income - $tax_sss_contrib['employee'] - $tax_philhealth_contrib['employee'] - $tax_pagibig_contrib['employee'];
-                        $tax_income_tax = calculateBIRWithholdingTax($tax_taxable_income);
-                        
-                        // Calculate totals
-                        $tax_net_pay_after_tax = $tax_monthly_income - $tax_income_tax;
-                        $tax_total_contributions = $tax_sss_contrib['employee'] + $tax_philhealth_contrib['employee'] + $tax_pagibig_contrib['employee'];
-                        $tax_total_deductions = $tax_income_tax + $tax_total_contributions;
-                        $tax_net_pay_after_deductions = $tax_monthly_income - $tax_total_deductions;
                         ?>
                         
-                        <!-- Input Section -->
-                        <div class="tax-input-section">
-                            <div class="tax-input-group">
-                                <label for="monthly-income-display">Monthly Income</label>
-                                <div class="tax-input-display">₱<?php echo number_format($tax_monthly_income, 2); ?></div>
-                    </div>
-                            <div class="tax-membership-group">
-                                <div class="tax-membership-item">
-                                    <label>SSS Membership:</label>
-                                    <span class="tax-membership-badge">Employed</span>
+                        <?php if ($has_attendance_data): ?>
+                        <!-- Tax Computation Breakdown - Step by Step -->
+                        <h4 class="mb-4"><i class="fas fa-calculator me-2"></i>Tax & Contributions Breakdown</h4>
+                        
+                        <!-- Step 1: Gross Income -->
+                        <div class="card mb-3 border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <strong><i class="fas fa-1 me-2"></i>Step 1: Gross Income (Earnings)</strong>
                             </div>
-                                <div class="tax-membership-item">
-                                    <label>PhilHealth Membership:</label>
-                                    <span class="tax-membership-badge">Employed</span>
-                        </div>
-                                <div class="tax-membership-item">
-                                    <label>Pag-IBIG Membership:</label>
-                                    <span class="tax-membership-badge">Employed</span>
-                                </div>
-                </div>
-            </div>
-
-                        <!-- Computation Result Section -->
-                        <div class="tax-computation-result">
-                            <h4 class="tax-computation-title">Computation Result</h4>
-                            
-                            <div class="row g-4">
-                                <!-- Left Column - Tax Computation -->
-                                <div class="col-md-6">
-                                    <div class="tax-computation-box">
-                                        <h5 class="tax-box-title">Tax Computation</h5>
-                                        <div class="tax-computation-item">
-                                            <span class="tax-item-label">Income Tax:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_income_tax, 2); ?></span>
-                                </div>
-                                        <div class="tax-computation-item">
-                                            <span class="tax-item-label">Net Pay after Tax:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_net_pay_after_tax, 2); ?></span>
-                                </div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>Basic Salary (from <?php echo $attendance_payroll_adjustments['attendance_summary']['present_days']; ?> present days)</td>
+                                        <td class="text-end">₱<?php echo number_format($attendance_payroll_adjustments['salary_adjustments']['basic_salary'] ?? 0, 2); ?></td>
+                                    </tr>
+                                    <?php if (($attendance_payroll_adjustments['salary_adjustments']['overtime_pay'] ?? 0) > 0): ?>
+                                    <tr>
+                                        <td>Overtime Pay</td>
+                                        <td class="text-end">₱<?php echo number_format($attendance_payroll_adjustments['salary_adjustments']['overtime_pay'], 2); ?></td>
+                                    </tr>
+                                    <?php endif; ?>
+                                    <tr class="table-primary fw-bold">
+                                        <td>Gross Income</td>
+                                        <td class="text-end">₱<?php echo number_format($tax_monthly_income, 2); ?></td>
+                                    </tr>
+                                </table>
                             </div>
                         </div>
-                                
-                                <!-- Right Column - Monthly Contributions -->
-                                <div class="col-md-6">
-                                    <div class="tax-computation-box">
-                                        <h5 class="tax-box-title">Monthly Contributions</h5>
-                                        <div class="tax-computation-item">
-                                            <span class="tax-item-label">SSS:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_sss_contrib['employee'], 2); ?></span>
-                                    </div>
-                                        <div class="tax-computation-item">
-                                            <span class="tax-item-label">PhilHealth:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_philhealth_contrib['employee'], 2); ?></span>
-                                </div>
-                                        <div class="tax-computation-item">
-                                            <span class="tax-item-label">Pag-IBIG:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_pagibig_contrib['employee'], 2); ?></span>
+                        
+                        <!-- Step 2: Government Contributions -->
+                        <div class="card mb-3 border-info">
+                            <div class="card-header bg-info text-white">
+                                <strong><i class="fas fa-2 me-2"></i>Step 2: Government Contributions (Employee Share)</strong>
                             </div>
-                                        <div class="tax-computation-item tax-total">
-                                            <span class="tax-item-label">Total Contributions:</span>
-                                            <span class="tax-item-value">₱<?php echo number_format($tax_total_contributions, 2); ?></span>
-                                    </div>
-                                </div>
-                            </div>
-                                    </div>
-                            
-                            <!-- Summary Deductions -->
-                            <div class="tax-summary-deductions">
-                                    <div class="tax-summary-item">
-                                    <span class="tax-summary-label">Total Deductions:</span>
-                                    <span class="tax-summary-value">₱<?php echo number_format($tax_total_deductions, 2); ?></span>
-                                    </div>
-                                <div class="tax-summary-item tax-summary-final">
-                                    <span class="tax-summary-label">Net Pay after Deductions:</span>
-                                    <span class="tax-summary-value">₱<?php 
-                                        $final_net_pay = max(0, $tax_net_pay_after_deductions);
-                                        echo number_format($final_net_pay, 2); 
-                                    ?></span>
-                                </div>
+                            <div class="card-body">
+                                <p class="text-muted small mb-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Contributions are calculated based on your base monthly salary of ₱<?php echo number_format($tax_basic_salary, 2); ?>
+                                </p>
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>
+                                            <strong>SSS</strong>
+                                            <small class="text-muted d-block">5.5% of salary (max MSC: ₱35,000)</small>
+                                        </td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_sss_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <strong>PhilHealth</strong>
+                                            <small class="text-muted d-block">2.5% of salary (ceiling: ₱100,000)</small>
+                                        </td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_philhealth_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <strong>Pag-IBIG</strong>
+                                            <small class="text-muted d-block">2% of salary (max base: ₱5,000)</small>
+                                        </td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_pagibig_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr class="table-info fw-bold">
+                                        <td>Total Contributions</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_total_contributions, 2); ?></td>
+                                    </tr>
+                                </table>
                             </div>
                         </div>
+                        
+                        <!-- Step 3: Taxable Income & Withholding Tax -->
+                        <div class="card mb-3 border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <strong><i class="fas fa-3 me-2"></i>Step 3: Withholding Tax (BIR)</strong>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>Gross Income</td>
+                                        <td class="text-end">₱<?php echo number_format($tax_monthly_income, 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Less: Government Contributions</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_total_contributions, 2); ?></td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td><strong>Taxable Income</strong></td>
+                                        <td class="text-end"><strong>₱<?php echo number_format($tax_taxable_income, 2); ?></strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2" class="pt-3">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                BIR Tax Bracket: 
+                                                <?php
+                                                if ($tax_taxable_income <= 20833) {
+                                                    echo "₱0 - ₱20,833 (0% tax)";
+                                                } elseif ($tax_taxable_income <= 33332) {
+                                                    echo "₱20,833 - ₱33,332 (15% over ₱20,833)";
+                                                } elseif ($tax_taxable_income <= 66666) {
+                                                    echo "₱33,333 - ₱66,666 (₱2,500 + 20% over ₱33,333)";
+                                                } elseif ($tax_taxable_income <= 166666) {
+                                                    echo "₱66,667 - ₱166,666 (₱10,833 + 25% over ₱66,667)";
+                                                } elseif ($tax_taxable_income <= 666666) {
+                                                    echo "₱166,667 - ₱666,666 (₱40,833 + 30% over ₱166,667)";
+                                                } else {
+                                                    echo "Above ₱666,666 (₱200,833 + 35% over ₱666,667)";
+                                                }
+                                                ?>
+                                            </small>
+                                        </td>
+                                    </tr>
+                                    <tr class="table-warning fw-bold">
+                                        <td>Withholding Tax</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_income_tax, 2); ?></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 4: Net Pay Summary -->
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <strong><i class="fas fa-4 me-2"></i>Step 4: Net Pay Calculation</strong>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td>Gross Income</td>
+                                        <td class="text-end">₱<?php echo number_format($tax_monthly_income, 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Less: SSS Contribution</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_sss_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Less: PhilHealth Contribution</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_philhealth_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Less: Pag-IBIG Contribution</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_pagibig_contrib['employee'], 2); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Less: Withholding Tax</td>
+                                        <td class="text-end text-danger">-₱<?php echo number_format($tax_income_tax, 2); ?></td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td><strong>Total Deductions</strong></td>
+                                        <td class="text-end text-danger"><strong>-₱<?php echo number_format($tax_total_deductions, 2); ?></strong></td>
+                                    </tr>
+                                    <tr class="table-success">
+                                        <td><strong class="fs-5">NET PAY (Take Home)</strong></td>
+                                        <td class="text-end"><strong class="fs-5 text-success">₱<?php echo number_format(max(0, $tax_net_pay_after_deductions), 2); ?></strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <!-- No attendance data message -->
+                        <div class="alert alert-info text-center py-5">
+                            <i class="fas fa-info-circle fa-3x mb-3 text-muted"></i>
+                            <h5 class="mb-2">No Payroll Data Available</h5>
+                            <p class="text-muted mb-0">
+                                This employee has no attendance records for the selected period (<?php echo htmlspecialchars($period_label); ?>).<br>
+                                Tax computations will be displayed once attendance data is available.
+                            </p>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -2019,12 +2146,48 @@ if ($selected_employee) {
                         <?php endif; ?>
                     </div>
 
+                    <?php if ($has_attendance_data && $attendance_payroll_adjustments): 
+                        $ps_adj = $attendance_payroll_adjustments['salary_adjustments'];
+                        $ps_att = $attendance_payroll_adjustments['attendance_summary'];
+                    ?>
+                    <!-- Attendance Summary for Payslip -->
+                    <div class="overall-section">
+                        <div class="overall-section-title"><i class="fas fa-calendar-check me-2"></i>Attendance Summary</div>
+                        <div class="row text-center mb-3">
+                            <div class="col-3">
+                                <div class="border rounded p-2 bg-success bg-opacity-10">
+                                    <div class="fs-4 fw-bold text-success"><?php echo $ps_att['present_days']; ?></div>
+                                    <small class="text-muted">Present</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="border rounded p-2 bg-danger bg-opacity-10">
+                                    <div class="fs-4 fw-bold text-danger"><?php echo $ps_att['absent_days']; ?></div>
+                                    <small class="text-muted">Absent</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="border rounded p-2 bg-warning bg-opacity-10">
+                                    <div class="fs-4 fw-bold text-warning"><?php echo $ps_att['late_days']; ?></div>
+                                    <small class="text-muted">Late</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="border rounded p-2 bg-info bg-opacity-10">
+                                    <div class="fs-4 fw-bold text-info"><?php echo $ps_att['leave_days']; ?></div>
+                                    <small class="text-muted">Leave</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <!-- Earnings and Deductions -->
                     <div class="overall-section">
                         <div class="payroll-two-column">
                             <!-- Earnings -->
                             <div>
-                                <div class="overall-section-title">Earnings</div>
+                                <div class="overall-section-title"><i class="fas fa-plus-circle text-success me-2"></i>Earnings</div>
                                 <table class="payroll-items-table">
                                     <thead>
                                         <tr>
@@ -2039,14 +2202,15 @@ if ($selected_employee) {
                                         
                                         if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments'])) {
                                             $adj = $attendance_payroll_adjustments['salary_adjustments'];
+                                            $att_sum = $attendance_payroll_adjustments['attendance_summary'];
                                             
                                             // Basic Salary (from attendance - earned from present days)
                                             if (isset($adj['basic_salary']) && $adj['basic_salary'] > 0) {
                                                 $total_earnings_overall += $adj['basic_salary'];
                                         ?>
                                             <tr>
-                                                <td>Basic Salary</td>
-                                                <td class="amount-cell">₱<?php echo number_format($adj['basic_salary'], 2); ?></td>
+                                                <td>Basic Salary <small class="text-muted">(<?php echo $att_sum['present_days']; ?> days)</small></td>
+                                                <td class="amount-cell text-success">₱<?php echo number_format($adj['basic_salary'], 2); ?></td>
                                             </tr>
                                         <?php 
                                             }
@@ -2086,7 +2250,7 @@ if ($selected_employee) {
 
                             <!-- Deductions -->
                             <div>
-                                <div class="overall-section-title">Deductions</div>
+                                <div class="overall-section-title"><i class="fas fa-minus-circle text-danger me-2"></i>Deductions</div>
                                 <table class="payroll-items-table">
                                     <thead>
                                         <tr>
@@ -2106,9 +2270,9 @@ if ($selected_employee) {
                                         $half_day_deduction_amount = 0;
                                         $late_penalty_amount = 0;
                                         
-                                        // MATCHING HRIS LOGIC EXACTLY: Only include attendance-based deductions when NO saved payslip exists for this period
+                                        // MATCHING HRIS LOGIC EXACTLY: Only include attendance-based deductions when there's attendance data AND NO saved payslip exists for this period
                                         // This ensures consistency with HRIS payroll calculations (payslip-data.php logic)
-                                        if ($attendance_payroll_adjustments && $employee_id_from_external && !$has_saved_payslip_for_period) {
+                                        if ($has_attendance_data && $attendance_payroll_adjustments && $employee_id_from_external && !$has_saved_payslip_for_period) {
                                             $adj = $attendance_payroll_adjustments['salary_adjustments'];
                                             
                                             // Get daily rate for calculation
@@ -2207,8 +2371,8 @@ if ($selected_employee) {
                                             $total_deductions_overall += $late_penalty_amount;
                                         }
                                         
-                                        // Display attendance-based deductions ONLY when NO saved payslip exists (matching HRIS logic)
-                                        if ($attendance_payroll_adjustments && $employee_id_from_external && !$has_saved_payslip_for_period) {
+                                        // Display attendance-based deductions ONLY when there's attendance data AND NO saved payslip exists (matching HRIS logic)
+                                        if ($has_attendance_data && $attendance_payroll_adjustments && $employee_id_from_external && !$has_saved_payslip_for_period) {
                                             // Absent days deduction (actual absences, excluding unpaid leaves)
                                             if ($actual_absent_deduction > 0): ?>
                                             <tr>
@@ -2246,62 +2410,74 @@ if ($selected_employee) {
                                             endif;
                                         }
                                         
-                                        // Calculate mandatory government contributions using 2025 rates
-                                        // Use GROSS salary from attendance (same as Tax Management tab)
+                                        // Initialize overall variables
                                         $overall_gross_salary = 0;
-                                        if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments'])) {
-                                            $adj = $attendance_payroll_adjustments['salary_adjustments'];
-                                            // Use gross_salary if available, otherwise calculate from basic_salary + overtime_pay
-                                            if (isset($adj['gross_salary']) && $adj['gross_salary'] > 0) {
-                                                $overall_gross_salary = $adj['gross_salary'];
-                                            } else {
-                                                $overall_gross_salary = $adj['basic_salary'] + $adj['overtime_pay'];
-                                            }
-                                        }
+                                        $overall_basic_salary = 0;
+                                        $overall_sss_contrib = ['employee' => 0, 'employer' => 0];
+                                        $overall_philhealth_contrib = ['employee' => 0, 'employer' => 0];
+                                        $overall_pagibig_contrib = ['employee' => 0, 'employer' => 0];
+                                        $overall_taxable_income = 0;
+                                        $overall_withholding_tax = 0;
                                         
-                                        // Fallback to total_earnings_overall if no attendance data
-                                        if ($overall_gross_salary == 0) {
-                                            $overall_gross_salary = $total_earnings_overall;
-                                        }
-                                        
-                                        // For tax calculations, use the BASE monthly salary (not gross with overtime)
-                                        // This is because SSS, PhilHealth, Pag-IBIG are calculated on base salary, not gross
-                                        $overall_basic_salary = $position_salary > 0 ? $position_salary : 0;
-                                        
-                                        // Get basic salary from earnings if not available
-                                        if ($overall_basic_salary == 0 && $earnings_result) {
-                                            $earnings_result->data_seek(0);
-                                            while($earning = $earnings_result->fetch_assoc()) {
-                                                if ($earning['code'] === 'BASIC') {
-                                                    // Use the original base salary value, not the gross salary
-                                                    $overall_basic_salary = floatval($earning['value']);
-                                                    break;
+                                        // ONLY calculate mandatory government contributions if there's attendance data
+                                        if ($has_attendance_data) {
+                                            // Calculate mandatory government contributions using 2025 rates
+                                            // Use GROSS salary from attendance (same as Tax Management tab)
+                                            if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments'])) {
+                                                $adj = $attendance_payroll_adjustments['salary_adjustments'];
+                                                // Use gross_salary if available, otherwise calculate from basic_salary + overtime_pay
+                                                if (isset($adj['gross_salary']) && $adj['gross_salary'] > 0) {
+                                                    $overall_gross_salary = $adj['gross_salary'];
+                                                } else {
+                                                    $overall_gross_salary = $adj['basic_salary'] + $adj['overtime_pay'];
                                                 }
                                             }
-                                            $earnings_result->data_seek(0); // Reset pointer
+                                            
+                                            // Fallback to total_earnings_overall if no attendance data
+                                            if ($overall_gross_salary == 0) {
+                                                $overall_gross_salary = $total_earnings_overall;
+                                            }
+                                            
+                                            // For tax calculations, use the BASE monthly salary (not gross with overtime)
+                                            // This is because SSS, PhilHealth, Pag-IBIG are calculated on base salary, not gross
+                                            $overall_basic_salary = $position_salary > 0 ? $position_salary : 0;
+                                            
+                                            // Get basic salary from earnings if not available
+                                            if ($overall_basic_salary == 0 && $earnings_result) {
+                                                $earnings_result->data_seek(0);
+                                                while($earning = $earnings_result->fetch_assoc()) {
+                                                    if ($earning['code'] === 'BASIC') {
+                                                        // Use the original base salary value, not the gross salary
+                                                        $overall_basic_salary = floatval($earning['value']);
+                                                        break;
+                                                    }
+                                                }
+                                                $earnings_result->data_seek(0); // Reset pointer
+                                            }
+                                            
+                                            // If we have attendance adjustments, get the base salary from there
+                                            if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'])) {
+                                                $overall_basic_salary = $attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'];
+                                            }
+                                            
+                                            // Calculate mandatory contributions using 2025 rates
+                                            $overall_sss_contrib = calculateSSSContribution($overall_basic_salary);
+                                            $overall_philhealth_contrib = calculatePhilHealthContribution($overall_basic_salary);
+                                            $overall_pagibig_contrib = calculatePagIBIGContribution($overall_basic_salary);
+                                            
+                                            // Calculate taxable income and withholding tax
+                                            $overall_taxable_income = $overall_gross_salary - $overall_sss_contrib['employee'] - $overall_philhealth_contrib['employee'] - $overall_pagibig_contrib['employee'];
+                                            $overall_withholding_tax = calculateBIRWithholdingTax($overall_taxable_income);
+                                            
+                                            // Add mandatory government deductions
+                                            $total_deductions_overall += $overall_sss_contrib['employee'];
+                                            $total_deductions_overall += $overall_philhealth_contrib['employee'];
+                                            $total_deductions_overall += $overall_pagibig_contrib['employee'];
+                                            $total_deductions_overall += $overall_withholding_tax;
                                         }
-                                        
-                                        // If we have attendance adjustments, get the base salary from there
-                                        if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'])) {
-                                            $overall_basic_salary = $attendance_payroll_adjustments['salary_adjustments']['prorated_base_salary'];
-                                        }
-                                        
-                                        // Calculate mandatory contributions using 2025 rates
-                                        $overall_sss_contrib = calculateSSSContribution($overall_basic_salary);
-                                        $overall_philhealth_contrib = calculatePhilHealthContribution($overall_basic_salary);
-                                        $overall_pagibig_contrib = calculatePagIBIGContribution($overall_basic_salary);
-                                        
-                                        // Calculate taxable income and withholding tax
-                                        $overall_taxable_income = $overall_gross_salary - $overall_sss_contrib['employee'] - $overall_philhealth_contrib['employee'] - $overall_pagibig_contrib['employee'];
-                                        $overall_withholding_tax = calculateBIRWithholdingTax($overall_taxable_income);
-                                        
-                                        // Add mandatory government deductions
-                                        $total_deductions_overall += $overall_sss_contrib['employee'];
-                                        $total_deductions_overall += $overall_philhealth_contrib['employee'];
-                                        $total_deductions_overall += $overall_pagibig_contrib['employee'];
-                                        $total_deductions_overall += $overall_withholding_tax;
                                         ?>
                                         
+                                        <?php if ($has_attendance_data): ?>
                                         <!-- Mandatory Government Deductions -->
                                         <tr>
                                             <td>SSS Employee Contribution</td>
@@ -2319,48 +2495,59 @@ if ($selected_employee) {
                                             <td>Withholding Tax (BIR)</td>
                                             <td class="amount-cell">₱<?php echo number_format($overall_withholding_tax, 2); ?></td>
                                         </tr>
+                                        <?php else: ?>
+                                        <tr>
+                                            <td colspan="2" class="text-center text-muted py-3">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                No deductions - no attendance data for this period
+                                            </td>
+                                        </tr>
+                                        <?php endif; ?>
                                         
                                         <?php
                                         // Optional deductions (only show if they have values and are not unnecessary)
-                                        $overall_unnecessary_deductions = ['MEDICAL', 'LATE', 'ABSENT', 'ADVANCE', 'LOAN', 'UNIFORM']; // These are handled by attendance system or not needed
-                                        
-                                        if ($deductions_result && $deductions_result->num_rows > 0): 
-                                            $deductions_result->data_seek(0);
-                                            while($deduction = $deductions_result->fetch_assoc()): 
-                                                // Skip unnecessary deductions
-                                                if (in_array($deduction['code'], $overall_unnecessary_deductions)) {
-                                                    continue;
-                                                }
-                                                
-                                                // Skip mandatory deductions already shown above
-                                                if (in_array($deduction['code'], ['SSS_EMP', 'PAGIBIG_EMP', 'PHILHEALTH_EMP', 'WHT'])) {
-                                                    continue;
-                                                }
-                                                
-                                                // Use payslip JSON data if available
-                                                $amount = 0;
-                                                if ($payslip_data && $payslip_data['payslip_json']) {
-                                                    $payslip_json = json_decode($payslip_data['payslip_json'], true);
-                                                    switch($deduction['code']) {
-                                                        case 'LOAN': $amount = $payslip_json['loan_deduction'] ?? $deduction['value']; break;
-                                                        case 'UNIFORM': $amount = $payslip_json['uniform_deduction'] ?? $deduction['value']; break;
-                                                        default: $amount = $deduction['value']; break;
+                                        // Only show when there's attendance data
+                                        if ($has_attendance_data):
+                                            $overall_unnecessary_deductions = ['MEDICAL', 'LATE', 'ABSENT', 'ADVANCE', 'LOAN', 'UNIFORM']; // These are handled by attendance system or not needed
+                                            
+                                            if ($deductions_result && $deductions_result->num_rows > 0): 
+                                                $deductions_result->data_seek(0);
+                                                while($deduction = $deductions_result->fetch_assoc()): 
+                                                    // Skip unnecessary deductions
+                                                    if (in_array($deduction['code'], $overall_unnecessary_deductions)) {
+                                                        continue;
                                                     }
-                                                } else {
-                                                    $amount = $deduction['value'];
-                                                }
-                                                
-                                                // Only show if amount is greater than 0
-                                                if ($amount > 0) {
-                                                $total_deductions_overall += $amount;
-                                        ?>
-                                            <tr>
-                                                <td><?php echo htmlspecialchars($deduction['name']); ?></td>
-                                                <td class="amount-cell">₱<?php echo number_format($amount, 2); ?></td>
-                                            </tr>
-                                        <?php 
-                                                }
-                                            endwhile; 
+                                                    
+                                                    // Skip mandatory deductions already shown above
+                                                    if (in_array($deduction['code'], ['SSS_EMP', 'PAGIBIG_EMP', 'PHILHEALTH_EMP', 'WHT'])) {
+                                                        continue;
+                                                    }
+                                                    
+                                                    // Use payslip JSON data if available
+                                                    $amount = 0;
+                                                    if ($payslip_data && $payslip_data['payslip_json']) {
+                                                        $payslip_json = json_decode($payslip_data['payslip_json'], true);
+                                                        switch($deduction['code']) {
+                                                            case 'LOAN': $amount = $payslip_json['loan_deduction'] ?? $deduction['value']; break;
+                                                            case 'UNIFORM': $amount = $payslip_json['uniform_deduction'] ?? $deduction['value']; break;
+                                                            default: $amount = $deduction['value']; break;
+                                                        }
+                                                    } else {
+                                                        $amount = $deduction['value'];
+                                                    }
+                                                    
+                                                    // Only show if amount is greater than 0
+                                                    if ($amount > 0) {
+                                                    $total_deductions_overall += $amount;
+                                            ?>
+                                                <tr>
+                                                    <td><?php echo htmlspecialchars($deduction['name']); ?></td>
+                                                    <td class="amount-cell">₱<?php echo number_format($amount, 2); ?></td>
+                                                </tr>
+                                            <?php 
+                                                    }
+                                                endwhile; 
+                                            endif;
                                         endif; 
                                         ?>
                                     </tbody>
@@ -2371,23 +2558,71 @@ if ($selected_employee) {
 
                     <!-- Summary -->
                     <div class="overall-summary-box">
+                        <?php if ($has_attendance_data): ?>
+                        <div class="overall-section-title mb-3"><i class="fas fa-calculator me-2"></i>Pay Computation Summary</div>
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td><i class="fas fa-plus text-success me-2"></i>Gross Earnings</td>
+                                <td class="text-end fw-bold">₱<?php echo number_format($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall, 2); ?></td>
+                            </tr>
+                            <tr>
+                                <td class="ps-4 text-muted small">Basic Salary (<?php echo $attendance_payroll_adjustments['attendance_summary']['present_days']; ?> present days)</td>
+                                <td class="text-end text-muted small">₱<?php echo number_format($attendance_payroll_adjustments['salary_adjustments']['basic_salary'] ?? 0, 2); ?></td>
+                            </tr>
+                            <?php if (($attendance_payroll_adjustments['salary_adjustments']['overtime_pay'] ?? 0) > 0): ?>
+                            <tr>
+                                <td class="ps-4 text-muted small">Overtime Pay</td>
+                                <td class="text-end text-muted small">₱<?php echo number_format($attendance_payroll_adjustments['salary_adjustments']['overtime_pay'], 2); ?></td>
+                            </tr>
+                            <?php endif; ?>
+                            <tr>
+                                <td><i class="fas fa-minus text-danger me-2"></i>Total Deductions</td>
+                                <td class="text-end fw-bold text-danger">-₱<?php echo number_format($total_deductions_overall, 2); ?></td>
+                            </tr>
+                            <tr>
+                                <td class="ps-4 text-muted small">Government Contributions (SSS, PhilHealth, Pag-IBIG)</td>
+                                <td class="text-end text-muted small">₱<?php echo number_format($overall_sss_contrib['employee'] + $overall_philhealth_contrib['employee'] + $overall_pagibig_contrib['employee'], 2); ?></td>
+                            </tr>
+                            <tr>
+                                <td class="ps-4 text-muted small">Withholding Tax (BIR)</td>
+                                <td class="text-end text-muted small">₱<?php echo number_format($overall_withholding_tax, 2); ?></td>
+                            </tr>
+                            <?php 
+                            $other_deductions = $total_deductions_overall - $overall_sss_contrib['employee'] - $overall_philhealth_contrib['employee'] - $overall_pagibig_contrib['employee'] - $overall_withholding_tax;
+                            if ($other_deductions > 0): ?>
+                            <tr>
+                                <td class="ps-4 text-muted small">Other Deductions (Absences, Late, etc.)</td>
+                                <td class="text-end text-muted small">₱<?php echo number_format($other_deductions, 2); ?></td>
+                            </tr>
+                            <?php endif; ?>
+                            <tr class="table-success">
+                                <td><strong class="fs-5"><i class="fas fa-wallet me-2"></i>NET PAY (Take Home)</strong></td>
+                                <td class="text-end"><strong class="fs-5 text-success">₱<?php 
+                                    $net_salary = ($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall) - $total_deductions_overall;
+                                    // Ensure net salary is never negative - set to 0 if negative
+                                    $net_salary = max(0, $net_salary);
+                                    echo number_format($net_salary, 2); 
+                                ?></strong></td>
+                            </tr>
+                        </table>
+                        <?php else: ?>
                         <div class="overall-summary-row">
                             <span class="label">Gross Earnings:</span>
-                            <span class="value">₱<?php echo number_format($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall, 2); ?></span>
+                            <span class="value">₱0.00</span>
                         </div>
                         <div class="overall-summary-row">
                             <span class="label">Total Deductions:</span>
-                            <span class="value">₱<?php echo number_format($total_deductions_overall, 2); ?></span>
+                            <span class="value">₱0.00</span>
                         </div>
                         <div class="overall-summary-row">
                             <span class="label">Net Salary:</span>
-                            <span class="value">₱<?php 
-                                $net_salary = ($overall_gross_salary > 0 ? $overall_gross_salary : $total_earnings_overall) - $total_deductions_overall;
-                                // Ensure net salary is never negative - set to 0 if negative
-                                $net_salary = max(0, $net_salary);
-                                echo number_format($net_salary, 2); 
-                            ?></span>
+                            <span class="value">₱0.00</span>
                         </div>
+                        <div class="text-center text-muted mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No payroll data available for this period
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Print Button -->

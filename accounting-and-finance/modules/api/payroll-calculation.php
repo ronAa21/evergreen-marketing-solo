@@ -571,6 +571,15 @@ function calculatePayrollFromAttendance($conn, $employee_external_no, $period_st
  * @return array ['employee' => float, 'employer' => float]
  */
 function calculateSSSContribution($monthly_salary) {
+    // If salary is 0 or negative, return 0 contributions
+    if ($monthly_salary <= 0) {
+        return [
+            'employee' => 0,
+            'employer' => 0,
+            'msc' => 0
+        ];
+    }
+    
     // Apply MSC limits
     $msc_min = 5000;
     $msc_max = 35000;
@@ -598,6 +607,14 @@ function calculateSSSContribution($monthly_salary) {
  * @return array ['employee' => float, 'employer' => float]
  */
 function calculatePhilHealthContribution($monthly_salary) {
+    // If salary is 0 or negative, return 0 contributions
+    if ($monthly_salary <= 0) {
+        return [
+            'employee' => 0,
+            'employer' => 0
+        ];
+    }
+    
     // Apply income ceiling
     $income_ceiling = 100000;
     $base_salary = min($monthly_salary, $income_ceiling);
@@ -621,6 +638,14 @@ function calculatePhilHealthContribution($monthly_salary) {
  * @return array ['employee' => float, 'employer' => float]
  */
 function calculatePagIBIGContribution($monthly_salary) {
+    // If salary is 0 or negative, return 0 contributions
+    if ($monthly_salary <= 0) {
+        return [
+            'employee' => 0,
+            'employer' => 0
+        ];
+    }
+    
     // Maximum contribution base is ₱5,000
     $contribution_base = min($monthly_salary, 5000);
     
@@ -642,6 +667,11 @@ function calculatePagIBIGContribution($monthly_salary) {
  * @return float Withholding tax amount
  */
 function calculateBIRWithholdingTax($taxable_income) {
+    // If taxable income is 0 or negative, return 0 tax
+    if ($taxable_income <= 0) {
+        return 0;
+    }
+    
     $tax = 0;
     
     // BIR 2025 Progressive Tax Brackets (Revised Withholding Tax Table effective January 1, 2023)
