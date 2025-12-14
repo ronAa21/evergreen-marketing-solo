@@ -1425,7 +1425,7 @@
                 </div>
         </div>
 
-                     <a href="#loans">Loans</a>
+                     <a href="/Evergreen/LoanSubsystem/index.php">Loans</a>
                      <a href="about.php">About Us</a>
         </div>
 
@@ -1490,11 +1490,11 @@
                 <p>Personalized investment strategies aligned with your financial goals.</p>
             </div>
             
-            <div class="solution-card">
+            <a href="/Evergreen/LoanSubsystem/index.php" class="solution-card" style="text-decoration: none; color: inherit;">
                 <div class="solution-icon">🏠</div>
                 <h3>Home Loans</h3>
                 <p>Competitive mortgage rates and flexible repayment options for your dream home.</p>
-            </div>
+            </a>
         </div>
 
     </section>
@@ -1521,7 +1521,7 @@
         <h2>LOAN SERVICES<br>WE OFFER</h2>
         
         <div class="loans-grid">
-            <div class="loan-card">
+            <a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Personal%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image">
                     <img src="images/personalloan.png" alt="Personal Loan">
                 </div>
@@ -1529,9 +1529,9 @@
                     <h3>Personal Loan</h3>
                     <p>Stop worrying and bring your<br> plans to life.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Car%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image2">
                     <img src="images/autoloan.png" alt="Auto Loan">
                 </div>
@@ -1539,9 +1539,9 @@
                     <h3>Auto Loan</h3>
                     <p>Drive your new car with low rates and fast approval.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Home%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image3">
                     <img src="images/homeloan.png" alt="Home Loan">
                 </div>
@@ -1549,9 +1549,9 @@
                     <h3>Home Loan</h3>
                     <p>Take the next step to your new home property to fund your various needs.</p>
                 </div>
-            </div>
+            </a>
             
-            <div class="loan-card">
+            <a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Multi-Purpose%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image4">
                     <img src="images/multipurposeloan.png" alt="Multipurpose Loan">
                 </div>
@@ -1559,7 +1559,7 @@
                     <h3>Multipurpose Loan</h3>
                     <p>Carry on with your plans. Use your property to fund your various needs.</p>
                 </div>
-            </div>
+            </a>
         </div>
     </section>
 
@@ -1661,10 +1661,10 @@
             <div class="footer-section">
                 <h4>Services</h4>
                 <ul>
-                    <li><a href="#">Home Loans</a></li>
-                    <li><a href="#">Personal Loans</a></li>
-                    <li><a href="#">Auto Loans</a></li>
-                    <li><a href="#">Multipurpose Loans</a></li>
+                    <li><a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Home%20Loan">Home Loans</a></li>
+                    <li><a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Personal%20Loan">Personal Loans</a></li>
+                    <li><a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Car%20Loan">Auto Loans</a></li>
+                    <li><a href="/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Multi-Purpose%20Loan">Multipurpose Loans</a></li>
                     <li><a href="#">Website Banking</a></li>
                 </ul>
             </div>
