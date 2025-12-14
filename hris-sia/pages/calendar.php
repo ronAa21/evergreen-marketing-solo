@@ -16,8 +16,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
             case 'add_event':
-                requireAdmin();
+                // Managers and Admins can add events
+                requireManager();
                 try {
+                    // For Managers, auto-set department to their managed department
+                    $department_id = $_POST['department_id'] ?: null;
+                    if (isManager() && !isAdmin() && !isHRManager()) {
+                        $userDeptId = getUserDepartmentId($conn);
+                        if ($userDeptId) {
+                            $department_id = $userDeptId; // Force Manager's department
+                        }
+                    }
+                    
                     // Create recruitment event
                     $sql = "INSERT INTO recruitment (job_title, department_id, date_posted, status, posted_by) 
                             VALUES (?, ?, ?, 'Open', ?)";
@@ -25,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt = $conn->prepare($sql);
                     $success = $stmt->execute([
                         $_POST['event_name'],
-                        $_POST['department_id'] ?: null,
+                        $department_id,
                         $_POST['event_start'],
                         $_SESSION['employee_id']
                     ]);
@@ -95,6 +105,86 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     if (isset($logger)) {
                         $logger->error('CALENDAR', 'Failed to delete event', $e->getMessage());
                     }
+                    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+                    exit;
+                }
+                break;
+
+            case 'get_participants':
+                // Get participants for an event
+                requireManager();
+                try {
+                    $eventId = $_POST['event_id'];
+                    $sql = "SELECT ep.*, e.first_name, e.last_name, d.department_name
+                            FROM event_participants ep
+                            JOIN employee e ON ep.employee_id = e.employee_id
+                            LEFT JOIN department d ON e.department_id = d.department_id
+                            WHERE ep.event_id = ?
+                            ORDER BY e.first_name, e.last_name";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->execute([$eventId]);
+                    $participants = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    echo json_encode(['success' => true, 'participants' => $participants]);
+                    exit;
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+                    exit;
+                }
+                break;
+
+            case 'invite_participants':
+                // Invite employees to an event
+                requireManager();
+                try {
+                    $eventId = $_POST['event_id'];
+                    $employeeIds = json_decode($_POST['employee_ids'], true);
+                    $invitedBy = $_SESSION['user_id'];
+                    
+                    $sql = "INSERT IGNORE INTO event_participants (event_id, employee_id, invited_by) VALUES (?, ?, ?)";
+                    $stmt = $conn->prepare($sql);
+                    
+                    $added = 0;
+                    foreach ($employeeIds as $empId) {
+                        if ($stmt->execute([$eventId, $empId, $invitedBy])) {
+                            $added++;
+                        }
+                    }
+                    
+                    echo json_encode(['success' => true, 'message' => "$added participant(s) invited", 'added' => $added]);
+                    exit;
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+                    exit;
+                }
+                break;
+
+            case 'remove_participant':
+                // Remove a participant from event
+                requireManager();
+                try {
+                    $sql = "DELETE FROM event_participants WHERE id = ?";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->execute([$_POST['participant_id']]);
+                    
+                    echo json_encode(['success' => true, 'message' => 'Participant removed']);
+                    exit;
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+                    exit;
+                }
+                break;
+
+            case 'update_rsvp':
+                // Update RSVP status
+                try {
+                    $sql = "UPDATE event_participants SET rsvp_status = ?, rsvp_date = NOW() WHERE id = ?";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->execute([$_POST['status'], $_POST['participant_id']]);
+                    
+                    echo json_encode(['success' => true, 'message' => 'RSVP updated']);
+                    exit;
+                } catch (Exception $e) {
                     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
                     exit;
                 }
@@ -280,7 +370,7 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
                         <button onclick="nextPeriod()" class="bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200">
                             <i class="fas fa-chevron-right"></i>
                         </button>
-                        <?php if (isAdmin()): ?>
+                        <?php if (isAdmin() || isManager()): ?>
                         <button onclick="openAddEventModal()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-200">
                             <i class="fas fa-plus mr-2"></i>Add Event
                         </button>
@@ -443,6 +533,85 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
         </div>
     </div>
 
+    <!-- Participants Modal -->
+    <?php if (hasManagementRole()): ?>
+    <div id="participantsModal" class="modal">
+        <div class="modal-content max-w-2xl w-full mx-4">
+            <div class="bg-teal-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+                <h2 class="text-xl font-bold">
+                    <i class="fas fa-users mr-2"></i>Event Participants
+                </h2>
+                <button onclick="closeParticipantsModal()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="participantEventId">
+                
+                <!-- Invite Section -->
+                <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-user-plus mr-1"></i>Invite Employees
+                    </h3>
+                    <div class="flex gap-2">
+                        <select id="employeeToInvite" multiple class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm" style="min-height: 80px;">
+                            <?php
+                            $employees = fetchAll($conn, "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as name, d.department_name 
+                                                          FROM employee e 
+                                                          LEFT JOIN department d ON e.department_id = d.department_id 
+                                                          WHERE e.employment_status = 'Active' 
+                                                          ORDER BY e.first_name");
+                            foreach ($employees as $emp): ?>
+                                <option value="<?php echo $emp['employee_id']; ?>">
+                                    <?php echo htmlspecialchars($emp['name']); ?> (<?php echo htmlspecialchars($emp['department_name'] ?? 'No Dept'); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button onclick="inviteSelected()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition h-fit">
+                            <i class="fas fa-plus mr-1"></i>Invite
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                </div>
+
+                <!-- Participants List -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-list mr-1"></i>Invited Participants
+                    </h3>
+                    <div id="participantsList" class="max-h-64 overflow-y-auto border rounded-lg">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-100 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left">Employee</th>
+                                    <th class="px-3 py-2 text-left">Department</th>
+                                    <th class="px-3 py-2 text-left">RSVP</th>
+                                    <th class="px-3 py-2 text-left">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="participantsTableBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- RSVP Summary -->
+                <div id="rsvpSummary" class="flex gap-3 text-sm">
+                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full"><i class="fas fa-check mr-1"></i>Accepted: <span id="acceptedCount">0</span></span>
+                    <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full"><i class="fas fa-clock mr-1"></i>Pending: <span id="pendingCount">0</span></span>
+                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full"><i class="fas fa-times mr-1"></i>Declined: <span id="declinedCount">0</span></span>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 rounded-b-lg">
+                <button onclick="closeParticipantsModal()" class="w-full px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <script src="../js/modal.js"></script>
     <script>
         let events = <?php echo json_encode($events); ?>;
@@ -574,11 +743,24 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
                 noEvents.classList.remove('hidden');
             } else {
                 noEvents.classList.add('hidden');
+                let hasManagement = <?php echo hasManagementRole() ? 'true' : 'false'; ?>;
                 container.innerHTML = monthEvents.map(e => `
-                    <div class="bg-teal-800 text-white rounded-lg p-4 hover:bg-teal-700 transition-colors ${isAdmin ? 'cursor-pointer' : ''}" ${isAdmin ? `onclick="openEditEventModal(${e.id})"` : ''}>
+                    <div class="bg-teal-800 text-white rounded-lg p-4 hover:bg-teal-700 transition-colors">
                         <h4 class="font-semibold text-lg mb-1">${e.name}</h4>
                         <p class="text-sm opacity-90">${formatDate(e.start)}</p>
                         ${e.department ? `<p class="text-xs opacity-75 mt-1">${e.department}</p>` : ''}
+                        ${hasManagement ? `
+                            <div class="mt-3 flex gap-2">
+                                <button onclick="event.stopPropagation(); openParticipantsModal(${e.id})" 
+                                        class="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition">
+                                    <i class="fas fa-users mr-1"></i>Participants
+                                </button>
+                                ${isAdmin ? `<button onclick="openEditEventModal(${e.id})" 
+                                        class="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition">
+                                    <i class="fas fa-edit mr-1"></i>Edit
+                                </button>` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                 `).join('');
             }
@@ -781,6 +963,111 @@ $departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_nam
                 closeLogoutModal();
             }
         });
+
+        // Participant Modal Functions
+        function openParticipantsModal(eventId) {
+            const modal = document.getElementById('participantsModal');
+            if (!modal) return; // Only available for managers
+            document.getElementById('participantEventId').value = eventId;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            loadParticipants(eventId);
+        }
+
+        function closeParticipantsModal() {
+            const modal = document.getElementById('participantsModal');
+            if (!modal) return;
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function loadParticipants(eventId) {
+            const tbody = document.getElementById('participantsTableBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-gray-500"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+            const formData = new FormData();
+            formData.append('action', 'get_participants');
+            formData.append('event_id', eventId);
+
+            fetch('calendar.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const participants = data.participants;
+                        let counts = { Accepted: 0, Pending: 0, Declined: 0, Maybe: 0 };
+                        
+                        if (participants.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-gray-500">No participants invited yet</td></tr>';
+                        } else {
+                            let html = '';
+                            participants.forEach(p => {
+                                counts[p.rsvp_status]++;
+                                const statusClass = {
+                                    'Accepted': 'bg-green-100 text-green-800',
+                                    'Pending': 'bg-yellow-100 text-yellow-800',
+                                    'Declined': 'bg-red-100 text-red-800',
+                                    'Maybe': 'bg-blue-100 text-blue-800'
+                                }[p.rsvp_status] || 'bg-gray-100';
+                                
+                                html += `<tr class="border-b">
+                                    <td class="px-3 py-2">${p.first_name} ${p.last_name}</td>
+                                    <td class="px-3 py-2">${p.department_name || 'N/A'}</td>
+                                    <td class="px-3 py-2"><span class="px-2 py-1 rounded text-xs ${statusClass}">${p.rsvp_status}</span></td>
+                                    <td class="px-3 py-2"><button onclick="removeParticipant(${p.id})" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button></td>
+                                </tr>`;
+                            });
+                            tbody.innerHTML = html;
+                        }
+                        
+                        document.getElementById('acceptedCount').textContent = counts.Accepted;
+                        document.getElementById('pendingCount').textContent = counts.Pending;
+                        document.getElementById('declinedCount').textContent = counts.Declined;
+                    }
+                });
+        }
+
+        function inviteSelected() {
+            const select = document.getElementById('employeeToInvite');
+            const eventId = document.getElementById('participantEventId').value;
+            const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
+
+            if (selectedIds.length === 0) {
+                showAlertModal('Please select at least one employee to invite.', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'invite_participants');
+            formData.append('event_id', eventId);
+            formData.append('employee_ids', JSON.stringify(selectedIds));
+
+            fetch('calendar.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlertModal(data.message, 'success');
+                        loadParticipants(eventId);
+                    } else {
+                        showAlertModal(data.message, 'error');
+                    }
+                });
+        }
+
+        function removeParticipant(participantId) {
+            if (!confirm('Remove this participant?')) return;
+
+            const formData = new FormData();
+            formData.append('action', 'remove_participant');
+            formData.append('participant_id', participantId);
+
+            fetch('calendar.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        loadParticipants(document.getElementById('participantEventId').value);
+                    }
+                });
+        }
     </script>
 
     <div id="logoutModal" class="modal">

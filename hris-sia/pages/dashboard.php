@@ -121,6 +121,105 @@ $chartData = [
     'applicants' => processMonthlyData(getMonthlyData($conn, 'applicant', 'created_at'), $months),
     'events' => processMonthlyData(getMonthlyData($conn, 'recruitment', 'date_posted'), $months)
 ];
+
+// ========================================
+// DETAILED DATA FOR MODALS
+// ========================================
+
+// Get detailed employee list for modal
+$employeesList = fetchAll($conn, 
+    "SELECT e.employee_id, 
+            CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as formatted_id,
+            CONCAT(e.first_name, ' ', e.last_name) as full_name,
+            d.department_name, p.position_title, e.hire_date, e.email
+     FROM employee e
+     LEFT JOIN department d ON e.department_id = d.department_id
+     LEFT JOIN position p ON e.position_id = p.position_id
+     WHERE e.employment_status = 'Active'
+     ORDER BY e.hire_date DESC
+     LIMIT 50"
+);
+$employeesList = $employeesList ?: [];
+
+// Get detailed applicant list for modal
+$applicantsList = fetchAll($conn,
+    "SELECT a.applicant_id, a.full_name, a.email, a.contact_number,
+            a.application_status, r.job_title, r.date_posted,
+            d.department_name
+     FROM applicant a
+     LEFT JOIN recruitment r ON a.recruitment_id = r.recruitment_id
+     LEFT JOIN department d ON r.department_id = d.department_id
+     WHERE a.application_status != 'Archived'
+     ORDER BY r.date_posted DESC
+     LIMIT 50"
+);
+$applicantsList = $applicantsList ?: [];
+
+// Get detailed events (recruitment) list for modal
+$eventsList = fetchAll($conn,
+    "SELECT r.recruitment_id, r.job_title, r.date_posted, r.status,
+            d.department_name
+     FROM recruitment r
+     LEFT JOIN department d ON r.department_id = d.department_id
+     WHERE MONTH(r.date_posted) = MONTH(CURDATE()) 
+     AND YEAR(r.date_posted) = YEAR(CURDATE())
+     ORDER BY r.date_posted DESC
+     LIMIT 50"
+);
+$eventsList = $eventsList ?: [];
+
+// Get today's attendance statistics for additional card
+$todayAttendance = fetchOne($conn,
+    "SELECT 
+        (SELECT COUNT(*) FROM attendance WHERE DATE(time_in) = CURDATE()) as present_today,
+        (SELECT COUNT(*) FROM employee WHERE employment_status = 'Active') as total_employees"
+);
+$absentToday = ($todayAttendance['total_employees'] ?? 0) - ($todayAttendance['present_today'] ?? 0);
+
+// Get pending leave requests for additional card
+$pendingLeaves = getCount($conn, 'leave_request', "status = 'Pending'");
+
+// Get absent employees today for modal
+$absentEmployeesList = fetchAll($conn,
+    "SELECT e.employee_id,
+            CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as formatted_id,
+            CONCAT(e.first_name, ' ', e.last_name) as full_name,
+            d.department_name, e.contact_number, e.email
+     FROM employee e
+     LEFT JOIN department d ON e.department_id = d.department_id
+     WHERE e.employment_status = 'Active'
+     AND e.employee_id NOT IN (
+         SELECT a.employee_id FROM attendance a WHERE DATE(a.time_in) = CURDATE()
+     )
+     AND e.employee_id NOT IN (
+         SELECT lr.employee_id FROM leave_request lr 
+         WHERE lr.status = 'Approved' 
+         AND CURDATE() BETWEEN lr.start_date AND lr.end_date
+     )
+     ORDER BY e.last_name
+     LIMIT 50"
+);
+$absentEmployeesList = $absentEmployeesList ?: [];
+
+// Get pending leave requests for modal
+$pendingLeavesList = fetchAll($conn,
+    "SELECT lr.leave_request_id, 
+            CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+            CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as formatted_id,
+            lt.leave_name, lr.start_date, lr.end_date, lr.total_days,
+            lr.reason, lr.date_requested
+     FROM leave_request lr
+     LEFT JOIN employee e ON lr.employee_id = e.employee_id
+     LEFT JOIN leave_type lt ON lr.leave_type_id = lt.leave_type_id
+     WHERE lr.status = 'Pending'
+     ORDER BY lr.date_requested DESC
+     LIMIT 50"
+);
+$pendingLeavesList = $pendingLeavesList ?: [];
+
+// Update stats to include new metrics
+$stats['absent_today'] = $absentToday;
+$stats['pending_leaves'] = $pendingLeaves;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -397,38 +496,101 @@ $chartData = [
         </header>
 
         <main class="p-4 lg:p-8">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
-                <div class="stat-card employees-card text-white rounded-xl p-5 lg:p-6 shadow-xl" 
-                     data-chart="employees"
-                     onclick="switchChart('employees')">
-                    <div class="stat-icon">
-                        <i class="fas fa-users text-2xl"></i>
+            <!-- Stats Grid with View Details -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6 mb-6 lg:mb-8">
+                <!-- Employees Card -->
+                <div class="stat-card employees-card text-white rounded-xl p-5 lg:p-6 shadow-xl cursor-pointer" 
+                     data-chart="employees" onclick="switchChart('employees')">
+                    <div class="flex items-start justify-between">
+                        <div class="stat-icon">
+                            <i class="fas fa-users text-2xl"></i>
+                        </div>
+                        <button onclick="event.stopPropagation(); openDetailModal('employees')" class="text-white/80 hover:text-white transition-colors p-1" title="View Details">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
                     </div>
                     <h3 class="stat-title">Employees</h3>
                     <p class="stat-number"><?php echo $stats['employees']; ?></p>
-                    <p class="stat-label">Total Employees</p>
+                    <p class="stat-label">Active Employees</p>
+                    <div class="mt-3 w-full bg-white/20 text-white text-xs py-1.5 rounded-lg text-center">
+                        <i class="fas fa-chart-bar mr-1"></i>Click to View Chart
+                    </div>
                 </div>
 
-                <div class="stat-card applicants-card text-white rounded-xl p-5 lg:p-6 shadow-xl" 
-                     data-chart="applicants"
-                     onclick="switchChart('applicants')">
-                    <div class="stat-icon">
-                        <i class="fas fa-user-tie text-2xl"></i>
+                <!-- Applicants Card -->
+                <div class="stat-card applicants-card text-white rounded-xl p-5 lg:p-6 shadow-xl cursor-pointer" 
+                     data-chart="applicants" onclick="switchChart('applicants')">
+                    <div class="flex items-start justify-between">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-tie text-2xl"></i>
+                        </div>
+                        <button onclick="event.stopPropagation(); openDetailModal('applicants')" class="text-white/80 hover:text-white transition-colors p-1" title="View Details">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
                     </div>
                     <h3 class="stat-title">Applicants</h3>
                     <p class="stat-number"><?php echo $stats['applicants']; ?></p>
                     <p class="stat-label">Total Applicants</p>
+                    <div class="mt-3 w-full bg-white/20 text-white text-xs py-1.5 rounded-lg text-center">
+                        <i class="fas fa-chart-bar mr-1"></i>Click to View Chart
+                    </div>
                 </div>
 
-                <div class="stat-card events-card text-white rounded-xl p-5 lg:p-6 shadow-xl sm:col-span-2 lg:col-span-1" 
-                     data-chart="events"
-                     onclick="switchChart('events')">
-                    <div class="stat-icon">
-                        <i class="fas fa-calendar-alt text-2xl"></i>
+                <!-- Events Card -->
+                <div class="stat-card events-card text-white rounded-xl p-5 lg:p-6 shadow-xl cursor-pointer" 
+                     data-chart="events" onclick="switchChart('events')">
+                    <div class="flex items-start justify-between">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar-alt text-2xl"></i>
+                        </div>
+                        <button onclick="event.stopPropagation(); openDetailModal('events')" class="text-white/80 hover:text-white transition-colors p-1" title="View Details">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
                     </div>
                     <h3 class="stat-title">Events</h3>
                     <p class="stat-number"><?php echo $stats['events']; ?></p>
-                    <p class="stat-label">Upcoming This Month</p>
+                    <p class="stat-label">This Month</p>
+                    <div class="mt-3 w-full bg-white/20 text-white text-xs py-1.5 rounded-lg text-center">
+                        <i class="fas fa-chart-bar mr-1"></i>Click to View Chart
+                    </div>
+                </div>
+
+                <!-- Absent Today Card -->
+                <div class="stat-card text-white rounded-xl p-5 lg:p-6 shadow-xl cursor-pointer" 
+                     style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);" onclick="openDetailModal('absent')">
+                    <div class="flex items-start justify-between">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-times text-2xl"></i>
+                        </div>
+                        <button onclick="event.stopPropagation(); openDetailModal('absent')" class="text-white/80 hover:text-white transition-colors p-1" title="View Details">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                    </div>
+                    <h3 class="stat-title">Absent Today</h3>
+                    <p class="stat-number"><?php echo $stats['absent_today']; ?></p>
+                    <p class="stat-label">Not Clocked In</p>
+                    <a href="attendance.php" onclick="event.stopPropagation()" class="mt-3 w-full block text-center bg-white/20 hover:bg-white/30 text-white text-xs py-1.5 rounded-lg transition-all">
+                        <i class="fas fa-clock mr-1"></i>View Attendance
+                    </a>
+                </div>
+
+                <!-- Pending Leaves Card -->
+                <div class="stat-card text-white rounded-xl p-5 lg:p-6 shadow-xl cursor-pointer" 
+                     style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);" onclick="openDetailModal('leaves')">
+                    <div class="flex items-start justify-between">
+                        <div class="stat-icon">
+                            <i class="fas fa-hourglass-half text-2xl"></i>
+                        </div>
+                        <button onclick="event.stopPropagation(); openDetailModal('leaves')" class="text-white/80 hover:text-white transition-colors p-1" title="View Details">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                    </div>
+                    <h3 class="stat-title">Pending Leaves</h3>
+                    <p class="stat-number"><?php echo $stats['pending_leaves']; ?></p>
+                    <p class="stat-label">Awaiting Approval</p>
+                    <a href="leave.php" onclick="event.stopPropagation()" class="mt-3 w-full block text-center bg-white/20 hover:bg-white/30 text-white text-xs py-1.5 rounded-lg transition-all">
+                        <i class="fas fa-clipboard-list mr-1"></i>Manage Leaves
+                    </a>
                 </div>
             </div>
 
@@ -469,6 +631,253 @@ $chartData = [
             </div>
         </div>
     </div>
+
+    <!-- Detail Modal (Generic) -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; width: 95%;">
+            <div id="detailModalHeader" class="bg-gradient-to-r from-teal-600 to-teal-700 text-white p-5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                            <i id="detailModalIcon" class="fas fa-users text-xl"></i>
+                        </div>
+                        <h2 id="detailModalTitle" class="text-xl font-bold">Details</h2>
+                    </div>
+                    <button onclick="closeDetailModal()" class="text-white/80 hover:text-white text-2xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4 max-h-[60vh] overflow-y-auto">
+                <div id="detailModalContent">
+                    <!-- Content will be injected via JavaScript -->
+                </div>
+            </div>
+            <div class="p-4 border-t flex justify-end gap-2 print-hide">
+                <button onclick="printModal()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all flex items-center gap-2">
+                    <i class="fas fa-print"></i>Print
+                </button>
+                <button onclick="closeDetailModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Styles -->
+    <style media="print">
+        /* Hide everything except the modal */
+        body * {
+            visibility: hidden;
+        }
+        
+        #detailModal,
+        #detailModal * {
+            visibility: visible;
+        }
+        
+        #detailModal {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: auto;
+            background: white !important;
+        }
+        
+        #detailModal .modal-content {
+            max-width: 100% !important;
+            width: 100% !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+        }
+        
+        /* Hide the close button and footer when printing */
+        .print-hide,
+        #detailModal button {
+            display: none !important;
+        }
+        
+        /* Make header print nicely */
+        #detailModalHeader {
+            background: #0d9488 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        /* Ensure table content is visible */
+        #detailModalContent table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        #detailModalContent th,
+        #detailModalContent td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        #detailModalContent th {
+            background-color: #f3f4f6 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        /* Add page title */
+        @page {
+            margin: 1cm;
+        }
+    </style>
+
+    <!-- Pre-rendered modal data for JavaScript -->
+    <script>
+        // Modal data from PHP
+        const modalData = {
+            employees: {
+                title: 'Active Employees',
+                icon: 'fa-users',
+                headerClass: 'from-teal-600 to-teal-700',
+                data: <?php echo json_encode($employeesList); ?>
+            },
+            applicants: {
+                title: 'All Applicants',
+                icon: 'fa-user-tie',
+                headerClass: 'from-cyan-600 to-cyan-700',
+                data: <?php echo json_encode($applicantsList); ?>
+            },
+            events: {
+                title: 'Events This Month',
+                icon: 'fa-calendar-alt',
+                headerClass: 'from-emerald-600 to-emerald-700',
+                data: <?php echo json_encode($eventsList); ?>
+            },
+            absent: {
+                title: 'Absent Today',
+                icon: 'fa-user-times',
+                headerClass: 'from-red-600 to-red-700',
+                data: <?php echo json_encode($absentEmployeesList); ?>
+            },
+            leaves: {
+                title: 'Pending Leave Requests',
+                icon: 'fa-hourglass-half',
+                headerClass: 'from-amber-500 to-amber-600',
+                data: <?php echo json_encode($pendingLeavesList); ?>
+            }
+        };
+
+        function openDetailModal(type, filterLabel = null) {
+            const config = modalData[type];
+            if (!config) return;
+
+            const modal = document.getElementById('detailModal');
+            const header = document.getElementById('detailModalHeader');
+            const title = document.getElementById('detailModalTitle');
+            const icon = document.getElementById('detailModalIcon');
+            const content = document.getElementById('detailModalContent');
+
+            // Update header
+            header.className = `bg-gradient-to-r ${config.headerClass} text-white p-5`;
+            
+            // Update title - add filter label if provided
+            if (filterLabel) {
+                title.textContent = `${config.title} (${filterLabel})`;
+            } else {
+                title.textContent = config.title;
+            }
+            icon.className = `fas ${config.icon} text-xl`;
+
+            // Filter data if filterLabel is provided
+            let displayData = config.data;
+            if (filterLabel && config.data.length > 0) {
+                displayData = config.data.filter(row => {
+                    // For employees, filter by hire_date year
+                    if (type === 'employees' && row.hire_date) {
+                        const year = new Date(row.hire_date).getFullYear().toString();
+                        return year === filterLabel;
+                    }
+                    // For applicants, filter by created_at or application date (if available)
+                    if (type === 'applicants' && row.created_at) {
+                        const monthYear = new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                        return monthYear.includes(filterLabel);
+                    }
+                    // For events, filter by date_posted month
+                    if (type === 'events' && row.date_posted) {
+                        const monthName = new Date(row.date_posted).toLocaleDateString('en-US', { month: 'short' });
+                        return monthName === filterLabel;
+                    }
+                    return true;
+                });
+            }
+
+            // Generate content based on type
+            let html = '';
+            if (displayData.length === 0) {
+                html = `<p class="text-center text-gray-500 py-8">No data available${filterLabel ? ` for ${filterLabel}` : ''}</p>`;
+            } else {
+                html = generateTableHTML(type, displayData);
+            }
+
+            content.innerHTML = html;
+            modal.classList.add('active');
+        }
+
+        function generateTableHTML(type, data) {
+            let html = '<div class="overflow-x-auto"><table class="w-full text-sm">';
+            
+            switch(type) {
+                case 'employees':
+                    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">ID</th><th class="px-3 py-2 text-left">Name</th><th class="px-3 py-2 text-left">Department</th><th class="px-3 py-2 text-left">Position</th><th class="px-3 py-2 text-left">Hire Date</th></tr></thead><tbody>';
+                    data.forEach(row => {
+                        html += `<tr class="border-b hover:bg-gray-50"><td class="px-3 py-2 font-mono text-teal-700">${row.formatted_id || ''}</td><td class="px-3 py-2">${row.full_name || ''}</td><td class="px-3 py-2">${row.department_name || 'N/A'}</td><td class="px-3 py-2">${row.position_title || 'N/A'}</td><td class="px-3 py-2">${row.hire_date || ''}</td></tr>`;
+                    });
+                    break;
+                case 'applicants':
+                    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">Name</th><th class="px-3 py-2 text-left">Position Applied</th><th class="px-3 py-2 text-left">Department</th><th class="px-3 py-2 text-left">Status</th></tr></thead><tbody>';
+                    data.forEach(row => {
+                        const statusClass = row.application_status === 'Hired' ? 'text-green-600' : (row.application_status === 'Rejected' ? 'text-red-600' : 'text-blue-600');
+                        html += `<tr class="border-b hover:bg-gray-50"><td class="px-3 py-2">${row.full_name || ''}</td><td class="px-3 py-2">${row.job_title || 'N/A'}</td><td class="px-3 py-2">${row.department_name || 'N/A'}</td><td class="px-3 py-2 ${statusClass}">${row.application_status || ''}</td></tr>`;
+                    });
+                    break;
+                case 'events':
+                    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">Event/Job Title</th><th class="px-3 py-2 text-left">Department</th><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Status</th></tr></thead><tbody>';
+                    data.forEach(row => {
+                        html += `<tr class="border-b hover:bg-gray-50"><td class="px-3 py-2">${row.job_title || ''}</td><td class="px-3 py-2">${row.department_name || 'N/A'}</td><td class="px-3 py-2">${row.date_posted || ''}</td><td class="px-3 py-2"><span class="px-2 py-1 rounded-full text-xs ${row.status === 'Open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">${row.status || ''}</span></td></tr>`;
+                    });
+                    break;
+                case 'absent':
+                    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">ID</th><th class="px-3 py-2 text-left">Name</th><th class="px-3 py-2 text-left">Department</th><th class="px-3 py-2 text-left">Contact</th></tr></thead><tbody>';
+                    data.forEach(row => {
+                        html += `<tr class="border-b hover:bg-gray-50"><td class="px-3 py-2 font-mono text-red-600">${row.formatted_id || ''}</td><td class="px-3 py-2">${row.full_name || ''}</td><td class="px-3 py-2">${row.department_name || 'N/A'}</td><td class="px-3 py-2">${row.contact_number || 'N/A'}</td></tr>`;
+                    });
+                    break;
+                case 'leaves':
+                    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">Employee</th><th class="px-3 py-2 text-left">Leave Type</th><th class="px-3 py-2 text-left">Dates</th><th class="px-3 py-2 text-left">Days</th></tr></thead><tbody>';
+                    data.forEach(row => {
+                        html += `<tr class="border-b hover:bg-gray-50"><td class="px-3 py-2"><div>${row.employee_name || ''}</div><div class="text-xs text-gray-500">${row.formatted_id || ''}</div></td><td class="px-3 py-2">${row.leave_name || 'N/A'}</td><td class="px-3 py-2">${row.start_date || ''} to ${row.end_date || ''}</td><td class="px-3 py-2 text-center">${row.total_days || 0}</td></tr>`;
+                    });
+                    break;
+            }
+            
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        function printModal() {
+            window.print();
+        }
+
+        // Close modal on outside click
+        document.getElementById('detailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDetailModal();
+            }
+        });
+    </script>
 
     <script>
         const chartConfig = {
@@ -602,7 +1011,23 @@ $chartData = [
                             maxBarThickness: 50
                         }]
                     },
-                    options: getChartOptions()
+                    options: {
+                        ...getChartOptions(),
+                        onClick: function(event, elements) {
+                            // Only trigger when clicking on an actual bar
+                            if (elements.length > 0) {
+                                const clickedIndex = elements[0].index;
+                                const clickedLabel = currentChart.data.labels[clickedIndex];
+                                // Open modal with the clicked year/month as filter
+                                openDetailModal(currentChartType, clickedLabel);
+                            }
+                        },
+                        onHover: function(event, elements) {
+                            // Change cursor to pointer when hovering over bars
+                            const canvas = document.getElementById('mainChart');
+                            canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                        }
+                    }
                 });
                 
                 chartContainer.style.opacity = '1';
@@ -616,10 +1041,16 @@ $chartData = [
             
             currentChartType = type;
             
+            // Remove active class from all cards
             document.querySelectorAll('.stat-card').forEach(card => {
                 card.classList.remove('card-active');
             });
-            document.querySelector(`[data-chart="${type}"]`).classList.add('card-active');
+            
+            // Add active class to the matching card (if exists)
+            const targetCard = document.querySelector(`[data-chart="${type}"]`);
+            if (targetCard) {
+                targetCard.classList.add('card-active');
+            }
             
             createChart(type);
         }

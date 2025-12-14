@@ -8,6 +8,94 @@ if (!isset($_SESSION['user_id'])) {
 require_once '../config/database.php';
 require_once '../includes/auth.php';
 
+// AJAX handler for employee attendance history
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'history') {
+    header('Content-Type: application/json');
+    
+    $employee_id = $_GET['employee_id'] ?? null;
+    $start_date = $_GET['start_date'] ?? date('Y-m-01');
+    $end_date = $_GET['end_date'] ?? date('Y-m-d');
+    
+    if (!$employee_id) {
+        echo json_encode(['error' => 'Employee ID required']);
+        exit;
+    }
+    
+    try {
+        $records = [];
+        $stats = ['present' => 0, 'absent' => 0, 'leave' => 0, 'restDays' => 0];
+        
+        // Get all dates in range
+        $current = strtotime($start_date);
+        $endTs = strtotime($end_date);
+        
+        while ($current <= $endTs) {
+            $dateStr = date('Y-m-d', $current);
+            $dayNum = date('N', $current); // 1=Mon, 7=Sun
+            $isWeekend = ($dayNum >= 6);
+            $dayName = date('l', $current);
+            
+            $record = [
+                'date' => date('M d, Y', $current),
+                'dayName' => $dayName,
+                'status' => 'Absent',
+                'timeIn' => null,
+                'timeOut' => null,
+                'hours' => null
+            ];
+            
+            if ($isWeekend) {
+                $record['status'] = 'Rest Day';
+                $stats['restDays']++;
+            } else {
+                // Check attendance
+                $attSql = "SELECT time_in, time_out, total_hours, status FROM attendance WHERE employee_id = ? AND DATE(date) = ?";
+                $attStmt = $conn->prepare($attSql);
+                $attStmt->execute([$employee_id, $dateStr]);
+                $att = $attStmt->fetch();
+                
+                if ($att) {
+                    $record['status'] = 'Present';
+                    $record['timeIn'] = $att['time_in'] ? date('h:i A', strtotime($att['time_in'])) : null;
+                    $record['timeOut'] = $att['time_out'] ? date('h:i A', strtotime($att['time_out'])) : null;
+                    $record['hours'] = $att['total_hours'] ?? null;
+                    $stats['present']++;
+                } else {
+                    // Check leave
+                    $leaveSql = "SELECT lt.leave_name FROM leave_request lr 
+                                 LEFT JOIN leave_type lt ON lr.leave_type_id = lt.leave_type_id
+                                 WHERE lr.employee_id = ? AND UPPER(TRIM(lr.status)) = 'APPROVED'
+                                 AND ? >= lr.start_date AND ? <= lr.end_date";
+                    $leaveStmt = $conn->prepare($leaveSql);
+                    $leaveStmt->execute([$employee_id, $dateStr, $dateStr]);
+                    $leave = $leaveStmt->fetch();
+                    
+                    if ($leave) {
+                        $record['status'] = 'Leave';
+                        $record['hours'] = $leave['leave_name'];
+                        $stats['leave']++;
+                    } else {
+                        // Only count absent for past dates
+                        if (strtotime($dateStr) <= strtotime(date('Y-m-d'))) {
+                            $stats['absent']++;
+                        } else {
+                            $record['status'] = 'Upcoming';
+                        }
+                    }
+                }
+            }
+            
+            $records[] = $record;
+            $current = strtotime('+1 day', $current);
+        }
+        
+        echo json_encode(['records' => $records, 'stats' => $stats]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to fetch data: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
 $message = '';
 $messageType = '';
 
@@ -68,6 +156,21 @@ $date_filter = $_GET['date'] ?? date('Y-m-d');
 $position_filter = $_GET['position'] ?? '';
 $department_filter = $_GET['department'] ?? '';
 
+// Weekend detection function (renamed to avoid conflict with auth.php)
+function isDateWeekend($date) {
+    $dayOfWeek = date('N', strtotime($date)); // 1=Monday, 7=Sunday
+    return $dayOfWeek >= 6; // 6=Saturday, 7=Sunday
+}
+
+$isRestDay = isDateWeekend($date_filter);
+$dayName = date('l', strtotime($date_filter)); // Get day name (Saturday, Sunday, etc.)
+
+// Department-scoped filtering for Managers
+$managerDeptFilter = "";
+$managerDeptId = null;
+if (isManager() && !isAdmin() && !isHRManager()) {
+    $managerDeptId = getUserDepartmentId($conn);
+}
 
 // Query to get attendance records
 $sql = "SELECT a.attendance_id, a.employee_id as emp_id, a.date, a.time_in, a.time_out, a.total_hours, a.status, a.remarks,
@@ -85,6 +188,12 @@ $sql = "SELECT a.attendance_id, a.employee_id as emp_id, a.date, a.time_in, a.ti
         WHERE DATE(a.date) = ?";
 
 $params = [$date_filter];
+
+// Manager department scope filter
+if ($managerDeptId) {
+    $sql .= " AND e.department_id = ?";
+    $params[] = $managerDeptId;
+}
 
 if ($position_filter) {
     $sql .= " AND p.position_title LIKE ?";
@@ -123,6 +232,12 @@ $params[] = $date_filter;
 $params[] = $date_filter;
 $params[] = $date_filter;
 $params[] = $date_filter;
+
+// Manager department scope filter for leave union
+if ($managerDeptId) {
+    $sql .= " AND e.department_id = ?";
+    $params[] = $managerDeptId;
+}
 
 if ($position_filter) {
     $sql .= " AND p.position_title LIKE ?";
@@ -247,8 +362,13 @@ try {
 
 // Calculate absent: total employees - present - on leave
 // Absent = employees without attendance record and not on leave
+// On weekends (rest days), absent count is 0
 $employeesPresentIds = array_unique($employeesWithAttendance);
-$absent = $totalEmployees - count($employeesPresentIds) - count($employeesOnLeave);
+if ($isRestDay) {
+    $absent = 0; // No absences on rest days
+} else {
+    $absent = $totalEmployees - count($employeesPresentIds) - count($employeesOnLeave);
+}
 
 // Ensure absent is not negative
 if ($absent < 0) $absent = 0;
@@ -391,6 +511,29 @@ try {
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin: 8px 0;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            letter-spacing: -1px;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -508,31 +651,93 @@ try {
                 </div>
             <?php endif; ?>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 lg:mb-6">
+            <?php if ($isRestDay): ?>
+                <div class="mb-4 p-4 rounded-lg bg-purple-100 text-purple-800 flex items-center gap-3">
+                    <i class="fas fa-moon text-2xl"></i>
+                    <div>
+                        <strong><?php echo htmlspecialchars($dayName); ?> - Rest Day</strong>
+                        <br>
+                        <small>This is a scheduled rest day. Attendance is not required and absences will not be recorded.</small>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="grid grid-cols-1 sm:grid-cols-<?php echo $isRestDay ? '4' : '3'; ?> gap-3 sm:gap-4 lg:gap-6 mb-4 lg:mb-6">
+                <?php if ($isRestDay): ?>
+                <div class="stat-card text-white rounded-xl p-5 lg:p-6 shadow-xl" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 50%, #8b5cf6 100%); background-size: 200% 200%; animation: gradientShift 3s ease infinite;">
+                    <div class="stat-icon">
+                        <i class="fas fa-moon text-2xl"></i>
+                    </div>
+                    <h3 class="stat-title">Rest Day</h3>
+                    <p class="stat-number"><?php echo $dayName; ?></p>
+                    <p class="stat-label">No attendance required</p>
+                </div>
+                <?php endif; ?>
                 <div class="stat-card present-card text-white rounded-xl p-5 lg:p-6 shadow-xl">
                     <div class="stat-icon">
                         <i class="fas fa-check-circle text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Present</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $present; ?></p>
+                    <h3 class="stat-title">Present</h3>
+                    <p class="stat-number"><?php echo $present; ?></p>
+                    <p class="stat-label"><?php echo $isRestDay ? 'Worked despite rest day' : 'Employees on site'; ?></p>
                 </div>
-                <div class="stat-card absent-card text-white rounded-xl p-5 lg:p-6 shadow-xl" onclick="showAbsentEmployees()" style="cursor: pointer;">
+                <div class="stat-card absent-card text-white rounded-xl p-5 lg:p-6 shadow-xl <?php echo $isRestDay ? 'opacity-50' : ''; ?>" <?php echo !$isRestDay ? 'onclick="showAbsentEmployees()" style="cursor: pointer;"' : ''; ?>>
                     <div class="stat-icon">
                         <i class="fas fa-times-circle text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Absent</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $absent; ?></p>
+                    <h3 class="stat-title">Absent</h3>
+                    <p class="stat-number"><?php echo $absent; ?></p>
+                    <p class="stat-label"><?php echo $isRestDay ? 'N/A (Rest day)' : 'Without attendance'; ?></p>
                 </div>
                 <div class="stat-card leave-card text-white rounded-xl p-5 lg:p-6 shadow-xl" onclick="showLeaveEmployees()" style="cursor: pointer;">
                     <div class="stat-icon">
                         <i class="fas fa-calendar-times text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Leave</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $leave; ?></p>
+                    <h3 class="stat-title">On Leave</h3>
+                    <p class="stat-number"><?php echo $leave; ?></p>
+                    <p class="stat-label">Approved leave</p>
                 </div>
             </div>
 
             <div class="card-enhanced p-4 lg:p-6 mb-4 lg:mb-6">
+                <!-- Employee History Search -->
+                <div class="mb-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg border border-teal-200">
+                    <h3 class="text-sm font-semibold text-teal-800 mb-3">
+                        <i class="fas fa-user-clock mr-2"></i>Employee Attendance History
+                    </h3>
+                    <div class="flex flex-wrap gap-3 items-end">
+                        <div class="flex-1 min-w-[200px]">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Select Employee</label>
+                            <select id="employeeSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                                <option value="">Choose an employee...</option>
+                                <?php
+                                $empList = fetchAll($conn, "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as full_name, d.department_name 
+                                                           FROM employee e 
+                                                           LEFT JOIN department d ON e.department_id = d.department_id 
+                                                           WHERE e.employment_status = 'Active' 
+                                                           ORDER BY e.first_name, e.last_name");
+                                foreach ($empList as $emp): ?>
+                                    <option value="<?php echo $emp['employee_id']; ?>">
+                                        EMP-<?php echo str_pad($emp['employee_id'], 4, '0', STR_PAD_LEFT); ?> - <?php echo htmlspecialchars($emp['full_name']); ?> (<?php echo htmlspecialchars($emp['department_name'] ?? 'No Dept'); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="w-36">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                            <input type="date" id="historyStartDate" value="<?php echo date('Y-m-01'); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                        </div>
+                        <div class="w-36">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                            <input type="date" id="historyEndDate" value="<?php echo date('Y-m-d'); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                        </div>
+                        <button type="button" onclick="viewEmployeeHistory()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all">
+                            <i class="fas fa-history mr-2"></i>View History
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Date Filters -->
                 <form method="GET" id="filterForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                     <input type="date" name="date" value="<?php echo htmlspecialchars($date_filter); ?>"
                         onchange="this.form.submit()"
@@ -581,7 +786,7 @@ try {
                                         data-time-in="<?php echo htmlspecialchars($record['time_in'] ?? ''); ?>"
                                         data-time-out="<?php echo htmlspecialchars($record['time_out'] ?? ''); ?>"
                                         data-attendance-id="<?php echo htmlspecialchars($record['attendance_id'] ?? ''); ?>">
-                                        <td class="px-3 py-2 text-sm text-gray-800"><?php echo htmlspecialchars($record['emp_id']); ?></td>
+                                        <td class="px-3 py-2 text-sm text-gray-800 font-mono text-teal-700"><?php echo 'EMP-' . str_pad($record['emp_id'], 4, '0', STR_PAD_LEFT); ?></td>
                                         <td class="px-3 py-2 text-sm text-gray-800"><?php echo htmlspecialchars($record['first_name'] . ' ' . $record['last_name']); ?></td>
                                         <td class="px-3 py-2 text-sm text-gray-800"><?php echo htmlspecialchars($record['position_title'] ?? 'N/A'); ?></td>
                                         <td class="px-3 py-2 text-sm text-gray-800"><?php echo htmlspecialchars($record['department_name'] ?? 'N/A'); ?></td>
@@ -638,7 +843,7 @@ try {
                                 <div class="flex justify-between items-start mb-3">
                                     <div>
                                         <h3 class="font-semibold text-gray-900 text-base"><?php echo htmlspecialchars($record['first_name'] . ' ' . $record['last_name']); ?></h3>
-                                        <p class="text-xs text-gray-500 mt-1"><?php echo htmlspecialchars($record['emp_id']); ?></p>
+                                        <p class="text-xs text-gray-500 mt-1 font-mono"><?php echo 'EMP-' . str_pad($record['emp_id'], 4, '0', STR_PAD_LEFT); ?></p>
                                     </div>
                                     <span class="px-2 py-1 text-xs font-medium rounded-full 
                                     <?php
@@ -928,7 +1133,8 @@ try {
             
             let listHtml = '<div class="max-h-96 overflow-y-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left">ID</th><th class="px-3 py-2 text-left">Name</th><th class="px-3 py-2 text-left">Position</th><th class="px-3 py-2 text-left">Department</th></tr></thead><tbody>';
             absentEmployees.forEach(emp => {
-                listHtml += `<tr class="border-b"><td class="px-3 py-2">${emp.employee_id}</td><td class="px-3 py-2">${emp.first_name} ${emp.last_name}</td><td class="px-3 py-2">${emp.position_title || 'N/A'}</td><td class="px-3 py-2">${emp.department_name || 'N/A'}</td></tr>`;
+                const formattedId = 'EMP-' + String(emp.employee_id).padStart(4, '0');
+                listHtml += `<tr class="border-b"><td class="px-3 py-2 font-mono text-teal-700">${formattedId}</td><td class="px-3 py-2">${emp.first_name} ${emp.last_name}</td><td class="px-3 py-2">${emp.position_title || 'N/A'}</td><td class="px-3 py-2">${emp.department_name || 'N/A'}</td></tr>`;
             });
             listHtml += '</tbody></table></div>';
             
@@ -939,7 +1145,7 @@ try {
                 modal.classList.add('active');
                 document.body.style.overflow = 'hidden';
             } else {
-                showAlertModal('Absent Employees for ' + dateFilter + ':\n\n' + absentEmployees.map(e => `${e.first_name} ${e.last_name} (ID: ${e.employee_id})`).join('\n'), 'info');
+                showAlertModal('Absent Employees for ' + dateFilter + ':\n\n' + absentEmployees.map(e => `${e.first_name} ${e.last_name} (EMP-${String(e.employee_id).padStart(4, '0')})`).join('\n'), 'info');
             }
         }
 
@@ -954,10 +1160,11 @@ try {
             
             let listHtml = '<div class="max-h-96 overflow-y-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left">ID</th><th class="px-3 py-2 text-left">Name</th><th class="px-3 py-2 text-left">Position</th><th class="px-3 py-2 text-left">Department</th><th class="px-3 py-2 text-left">Leave Type</th><th class="px-3 py-2 text-left">Dates</th><th class="px-3 py-2 text-left">Days</th></tr></thead><tbody>';
             leaveEmployees.forEach(emp => {
+                const formattedId = 'EMP-' + String(emp.employee_id).padStart(4, '0');
                 const startDate = new Date(emp.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const endDate = new Date(emp.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 listHtml += `<tr class="border-b">
-                    <td class="px-3 py-2">${emp.employee_id}</td>
+                    <td class="px-3 py-2 font-mono text-teal-700">${formattedId}</td>
                     <td class="px-3 py-2">${emp.first_name} ${emp.last_name}</td>
                     <td class="px-3 py-2">${emp.position_title || 'N/A'}</td>
                     <td class="px-3 py-2">${emp.department_name || 'N/A'}</td>
@@ -975,7 +1182,7 @@ try {
                 modal.classList.add('active');
                 document.body.style.overflow = 'hidden';
             } else {
-                showAlertModal('Employees on Leave for ' + dateFilter + ':\n\n' + leaveEmployees.map(e => `${e.first_name} ${e.last_name} (ID: ${e.employee_id}) - ${e.leave_name || 'N/A'}`).join('\n'), 'info');
+                showAlertModal('Employees on Leave for ' + dateFilter + ':\n\n' + leaveEmployees.map(e => `${e.first_name} ${e.last_name} (EMP-${String(e.employee_id).padStart(4, '0')}) - ${e.leave_name || 'N/A'}`).join('\n'), 'info');
             }
         }
 
@@ -1072,6 +1279,29 @@ try {
         </div>
     </div>
 
+    <!-- Employee History Modal -->
+    <div id="employeeHistoryModal" class="modal">
+        <div class="modal-content max-w-4xl w-full mx-4">
+            <div class="bg-teal-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+                <h2 class="text-xl font-bold">
+                    <i class="fas fa-user-clock mr-2"></i>Attendance History - <span id="employeeHistoryTitle">Employee</span>
+                </h2>
+                <button onclick="closeEmployeeHistoryModal()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6" id="employeeHistoryContent">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div class="p-4 bg-gray-50 rounded-b-lg flex gap-2">
+                <button onclick="closeEmployeeHistoryModal()" 
+                        class="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Add event listeners for custom modals
         document.addEventListener('DOMContentLoaded', function() {
@@ -1100,9 +1330,90 @@ try {
                 if (e.key === 'Escape') {
                     closeAbsentEmployeesModal();
                     closeLeaveEmployeesModal();
+                    closeEmployeeHistoryModal();
                 }
             });
         });
+
+        // Employee History Modal Functions
+        function viewEmployeeHistory() {
+            const employeeId = document.getElementById('employeeSelect').value;
+            const startDate = document.getElementById('historyStartDate').value;
+            const endDate = document.getElementById('historyEndDate').value;
+
+            if (!employeeId) {
+                showAlertModal('Please select an employee first.', 'warning');
+                return;
+            }
+
+            // Show loading
+            const modal = document.getElementById('employeeHistoryModal');
+            const content = document.getElementById('employeeHistoryContent');
+            const title = document.getElementById('employeeHistoryTitle');
+            
+            if (!modal || !content) {
+                showAlertModal('Modal not found. Please refresh the page.', 'error');
+                return;
+            }
+
+            const selectedOption = document.getElementById('employeeSelect').selectedOptions[0];
+            title.textContent = selectedOption.text.split(' - ')[1]?.split(' (')[0] || 'Employee';
+            content.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-3xl text-teal-600"></i><p class="mt-2 text-gray-600">Loading attendance history...</p></div>';
+            
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            // Fetch attendance history via AJAX
+            fetch(`attendance.php?ajax=history&employee_id=${employeeId}&start_date=${startDate}&end_date=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        content.innerHTML = `<div class="text-center py-8 text-red-600"><i class="fas fa-exclamation-circle text-3xl"></i><p class="mt-2">${data.error}</p></div>`;
+                        return;
+                    }
+
+                    let html = `<div class="mb-4 flex gap-4 text-sm">
+                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full"><i class="fas fa-check-circle mr-1"></i>Present: ${data.stats.present}</span>
+                        <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full"><i class="fas fa-times-circle mr-1"></i>Absent: ${data.stats.absent}</span>
+                        <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full"><i class="fas fa-calendar-times mr-1"></i>Leave: ${data.stats.leave}</span>
+                        <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full"><i class="fas fa-moon mr-1"></i>Rest Days: ${data.stats.restDays}</span>
+                    </div>`;
+                    
+                    html += '<div class="max-h-96 overflow-y-auto"><table class="w-full text-sm"><thead class="sticky top-0 bg-gray-100"><tr><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Day</th><th class="px-3 py-2 text-left">Status</th><th class="px-3 py-2 text-left">Time In</th><th class="px-3 py-2 text-left">Time Out</th><th class="px-3 py-2 text-left">Hours</th></tr></thead><tbody>';
+                    
+                    data.records.forEach(record => {
+                        const statusClass = {
+                            'Present': 'bg-green-100 text-green-800',
+                            'Absent': 'bg-red-100 text-red-800',
+                            'Leave': 'bg-yellow-100 text-yellow-800',
+                            'Rest Day': 'bg-purple-100 text-purple-800'
+                        }[record.status] || 'bg-gray-100 text-gray-800';
+                        
+                        html += `<tr class="border-b">
+                            <td class="px-3 py-2 font-mono">${record.date}</td>
+                            <td class="px-3 py-2">${record.dayName}</td>
+                            <td class="px-3 py-2"><span class="px-2 py-1 rounded text-xs font-medium ${statusClass}">${record.status}</span></td>
+                            <td class="px-3 py-2">${record.timeIn || '-'}</td>
+                            <td class="px-3 py-2">${record.timeOut || '-'}</td>
+                            <td class="px-3 py-2">${record.hours || '-'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    content.innerHTML = html;
+                })
+                .catch(err => {
+                    content.innerHTML = `<div class="text-center py-8 text-red-600"><i class="fas fa-exclamation-circle text-3xl"></i><p class="mt-2">Error loading data: ${err.message}</p></div>`;
+                });
+        }
+
+        function closeEmployeeHistoryModal() {
+            const modal = document.getElementById('employeeHistoryModal');
+            if (modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
     </script>
 
     <script src="../js/modal.js"></script>

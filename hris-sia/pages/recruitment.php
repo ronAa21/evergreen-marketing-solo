@@ -989,7 +989,7 @@ $noRecruitments = empty($recruitments);
                         <tbody>
                             <?php foreach ($applicants as $applicant): ?>
                                 <tr class="border-b border-gray-200 hover:bg-gray-50">
-                                    <td class="px-4 py-3 text-sm"><?php echo $applicant['applicant_id']; ?></td>
+                                    <td class="px-4 py-3 text-sm font-mono text-cyan-700"><?php echo 'APP-' . str_pad($applicant['applicant_id'], 4, '0', STR_PAD_LEFT); ?></td>
                                     <td class="px-4 py-3 text-sm font-medium"><?php echo htmlspecialchars($applicant['full_name']); ?></td>
                                     <td class="px-4 py-3 text-sm"><?php echo htmlspecialchars($applicant['job_title'] ?? 'N/A'); ?></td>
                                     <td class="px-4 py-3 text-sm"><?php echo htmlspecialchars($applicant['department_name'] ?? 'N/A'); ?></td>
@@ -1088,7 +1088,7 @@ $noRecruitments = empty($recruitments);
                             <div class="flex justify-between items-start mb-3">
                                 <div>
                                     <h3 class="font-semibold text-gray-900"><?php echo htmlspecialchars($applicant['full_name']); ?></h3>
-                                    <p class="text-xs text-gray-500">ID: <?php echo $applicant['applicant_id']; ?></p>
+                                    <p class="text-xs text-gray-500 font-mono">ID: <?php echo 'APP-' . str_pad($applicant['applicant_id'], 4, '0', STR_PAD_LEFT); ?></p>
                                 </div>
                                 <span class="px-2 py-1 text-xs font-medium rounded-full 
                                     <?php

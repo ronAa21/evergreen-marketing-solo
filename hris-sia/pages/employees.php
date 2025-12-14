@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     // Update salary information in employee_refs table (for payroll integration)
                     if ($success && isset($_POST['monthly_salary']) && !empty($_POST['monthly_salary'])) {
                         $monthly_salary = floatval($_POST['monthly_salary']);
-                        $external_employee_no = 'EMP' . str_pad($_POST['employee_id'], 3, '0', STR_PAD_LEFT);
+                        $external_employee_no = 'EMP-' . str_pad($_POST['employee_id'], 4, '0', STR_PAD_LEFT);
                         
                         // Check if employee_refs record exists
                         $check_sql = "SELECT id FROM employee_refs WHERE external_employee_no = ?";
@@ -245,11 +245,11 @@ $sql = "SELECT e.*,
         d.department_name, 
         p.position_title,
         er.base_monthly_salary,
-        CONCAT('EMP', LPAD(e.employee_id, 3, '0')) as external_employee_no
+        CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as external_employee_no
         FROM employee e
         LEFT JOIN department d ON e.department_id = d.department_id
         LEFT JOIN position p ON e.position_id = p.position_id
-        LEFT JOIN employee_refs er ON er.external_employee_no = CONCAT('EMP', LPAD(e.employee_id, 3, '0'))
+        LEFT JOIN employee_refs er ON er.external_employee_no = CONCAT('EMP-', LPAD(e.employee_id, 4, '0'))
         WHERE e.employment_status = ?";
 
 $params = [$view === 'archived' ? 'Inactive' : 'Active'];
@@ -552,7 +552,7 @@ $positions = fetchAll($conn, "SELECT * FROM position ORDER BY position_title");
                             <?php else: ?>
                                 <?php foreach ($employees as $emp): ?>
                                     <tr class="border-b border-gray-200 hover:bg-gray-50">
-                                        <td class="px-3 py-2 text-sm"><?php echo $emp['employee_id']; ?></td>
+                                        <td class="px-3 py-2 text-sm font-mono text-teal-700"><?php echo htmlspecialchars($emp['external_employee_no']); ?></td>
                                         <td class="px-3 py-2 text-sm"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></td>
                                         <td class="px-3 py-2 text-sm"><?php echo htmlspecialchars($emp['position_title'] ?? 'N/A'); ?></td>
                                         <td class="px-3 py-2 text-sm"><?php echo htmlspecialchars($emp['department_name'] ?? 'N/A'); ?></td>
@@ -599,7 +599,7 @@ $positions = fetchAll($conn, "SELECT * FROM position ORDER BY position_title");
                                 <div class="flex justify-between items-start mb-3">
                                     <div>
                                         <h3 class="font-semibold text-gray-900"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></h3>
-                                        <p class="text-xs text-gray-500">ID: <?php echo $emp['employee_id']; ?></p>
+                                        <p class="text-xs text-gray-500">ID: <?php echo htmlspecialchars($emp['external_employee_no']); ?></p>
                                     </div>
                                 </div>
                                 <div class="space-y-2 mb-3 text-sm">

@@ -3,6 +3,39 @@ if (!isset($auth_included)) {
     require_once __DIR__ . '/auth.php';
 }
 ?>
+
+<style>
+    /* Page Content Slide Animation - Only for main content, not full page */
+    .main-content-wrapper {
+        animation: slideInFromRight 0.4s ease-out;
+    }
+
+    @keyframes slideInFromRight {
+        from {
+            opacity: 0;
+            transform: translateX(40px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .page-exit {
+        animation: slideOutToLeft 0.25s ease-in forwards;
+    }
+
+    @keyframes slideOutToLeft {
+        from {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateX(-40px);
+        }
+    }
+</style>
 <style>
     header {
         position: relative !important;
@@ -38,6 +71,13 @@ if (!isset($auth_included)) {
         box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
         backdrop-filter: blur(20px);
         z-index: 50 !important;
+        overflow-y: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+    }
+
+    #sidebar::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Opera */
     }
 
     #sidebar-overlay {
@@ -216,25 +256,12 @@ if (!isset($auth_included)) {
     }
 
     #sidebar {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0, 54, 49, 0.3) transparent;
+        scrollbar-width: none; /* Hide scrollbar for Firefox */
+        -ms-overflow-style: none; /* Hide scrollbar for IE/Edge */
     }
 
     #sidebar::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    #sidebar::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    #sidebar::-webkit-scrollbar-thumb {
-        background: rgba(0, 54, 49, 0.3);
-        border-radius: 2px;
-    }
-
-    #sidebar::-webkit-scrollbar-thumb:hover {
-        background: rgba(0, 54, 49, 0.5);
+        display: none; /* Hide scrollbar for Chrome, Safari, Opera */
     }
 </style>
 
@@ -262,7 +289,7 @@ if (!isset($auth_included)) {
         // Determine asset path based on current location
         $asset_path = (strpos($_SERVER['PHP_SELF'], '/pages/') !== false) ? '../assets/' : 'assets/';
         ?>
-        <img src="<?php echo $asset_path; ?>PFP1.jpg"
+        <img src="<?php echo $asset_path; ?>user-green.svg"
             alt="Profile"
             class="w-20 h-20 rounded-full mx-auto mb-3 object-cover shadow-md">
 
@@ -289,12 +316,30 @@ if (!isset($auth_included)) {
             'leave.php' => 'Leave',
             'recruitment.php' => 'Recruitment',
             'calendar.php' => 'Calendar',
+            'roles.php' => 'Roles',
             'logs.php' => 'Logs'
         ];
 
         foreach ($menu_items as $page => $label):
-            // Hide Logs for HR Manager
+            // Role-based menu visibility
+            // Logs: Admin only
             if ($page === 'logs.php' && !canViewLogs()) {
+                continue;
+            }
+            // Roles: Admin only
+            if ($page === 'roles.php' && !canManageRoles()) {
+                continue;
+            }
+            // Recruitment: Admin and HR Manager only
+            if ($page === 'recruitment.php' && !canManageRecruitment()) {
+                continue;
+            }
+            // Employees: Admin and HR Manager only (Managers/Supervisors can't edit employees)
+            if ($page === 'employees.php' && !canManageEmployees()) {
+                continue;
+            }
+            // Leave: Available to Admin, HR Manager, and Manager
+            if ($page === 'leave.php' && !canManageLeaves()) {
                 continue;
             }
             $is_active = ($current_page === $page);
@@ -354,12 +399,53 @@ if (!isset($auth_included)) {
     });
 
 
-    const navLinks = sidebar.querySelectorAll('nav a');
-    navLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            if (window.innerWidth < 1024) {
-                closeSidebarFunc();
-            }
+    // Page transition animations - wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+        const navLinks = sidebar.querySelectorAll('nav a');
+        const mainContent = document.querySelector('main');
+
+        // Only add slide-in animation if we came from sidebar navigation
+        if (mainContent && sessionStorage.getItem('sidebarNav') === 'true') {
+            mainContent.classList.add('main-content-wrapper');
+            // Clear the flag so form submissions don't animate
+            sessionStorage.removeItem('sidebarNav');
+        }
+
+        // Handle page transitions for sidebar navigation only
+        navLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                
+                // Skip if it's the current page (has active styling)
+                if (this.classList.contains('bg-teal-700')) {
+                    e.preventDefault();
+                    if (window.innerWidth < 1024) {
+                        closeSidebarFunc();
+                    }
+                    return;
+                }
+
+                // Intercept navigation for transition effect
+                e.preventDefault();
+
+                // Set flag so next page knows to animate
+                sessionStorage.setItem('sidebarNav', 'true');
+
+                // Close sidebar on mobile
+                if (window.innerWidth < 1024) {
+                    closeSidebarFunc();
+                }
+
+                // Add exit animation to main content only
+                if (mainContent) {
+                    mainContent.classList.add('page-exit');
+                }
+
+                // Navigate after animation completes
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 250);
+            });
         });
     });
 </script>
