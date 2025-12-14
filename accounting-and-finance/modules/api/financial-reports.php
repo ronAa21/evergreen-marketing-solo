@@ -541,11 +541,11 @@ function generateTrialBalance($conn, $date_from, $date_to, $account_type) {
         }
     }
     
-    // ========== REWARDS & MISSIONS ==========
-    // 9. REWARDS POINTS (Expense - Marketing)
+    // ========== REWARDS & MISSIONS (Converted to Peso - 1 point = 0.01 peso) ==========
+    // 9. REWARDS POINTS (Expense - Marketing) - Debit increases expense
     if ($conn->query("SHOW TABLES LIKE 'points_history'")->num_rows > 0) {
-        $sql = "SELECT 'RWD-001' as code, 'Rewards Points Issued' as name, 'expense' as account_type,
-                COALESCE(SUM(points), 0) as total_debit, 0 as total_credit
+        $sql = "SELECT 'RWD-001' as code, 'Rewards Points Expense' as name, 'expense' as account_type,
+                COALESCE(SUM(points), 0) * 0.01 as total_debit, 0 as total_credit
                 FROM points_history WHERE DATE(created_at) BETWEEN ? AND ?";
         $stmt = $conn->prepare($sql);
         if ($stmt) {
@@ -560,10 +560,10 @@ function generateTrialBalance($conn, $date_from, $date_to, $account_type) {
         }
     }
     
-    // 10. MISSIONS COMPLETED (Expense)
+    // 10. MISSIONS COMPLETED (Expense) - Debit increases expense
     if ($conn->query("SHOW TABLES LIKE 'user_missions'")->num_rows > 0) {
-        $sql = "SELECT 'MSN-001' as code, 'Missions Rewards' as name, 'expense' as account_type,
-                COALESCE(SUM(um.points_earned), 0) as total_debit, 0 as total_credit
+        $sql = "SELECT 'MSN-001' as code, 'Missions Rewards Expense' as name, 'expense' as account_type,
+                COALESCE(SUM(um.points_earned), 0) * 0.01 as total_debit, 0 as total_credit
                 FROM user_missions um WHERE um.status = 'completed' AND DATE(um.completed_at) BETWEEN ? AND ?";
         $stmt = $conn->prepare($sql);
         if ($stmt) {
@@ -578,11 +578,11 @@ function generateTrialBalance($conn, $date_from, $date_to, $account_type) {
         }
     }
     
-    // ========== PAYROLL ==========
+    // ========== PAYROLL (Expense - Debit only) ==========
     if (empty($account_type) || $account_type === 'expense') {
         if ($conn->query("SHOW TABLES LIKE 'payroll_runs'")->num_rows > 0) {
             $sql = "SELECT 'PAY-001' as code, 'Payroll Expenses' as name, 'expense' as account_type,
-                    COALESCE(SUM(total_net), 0) as total_debit, COALESCE(SUM(total_net), 0) as total_credit
+                    COALESCE(SUM(total_net), 0) as total_debit, 0 as total_credit
                     FROM payroll_runs WHERE status IN ('completed', 'finalized') AND DATE(run_at) BETWEEN ? AND ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -592,10 +592,37 @@ function generateTrialBalance($conn, $date_from, $date_to, $account_type) {
                 if ($row && $row['total_debit'] > 0) {
                     $accounts[] = $row;
                     $total_debit += $row['total_debit'];
-                    $total_credit += $row['total_credit'];
                 }
                 $stmt->close();
             }
+        }
+    }
+    
+    // ========== BALANCING ENTRY - Retained Earnings ==========
+    // In double-entry accounting, debits must equal credits
+    // Add a balancing entry for Retained Earnings (Equity)
+    $difference = $total_debit - $total_credit;
+    if (abs($difference) > 0.01) {
+        if ($difference > 0) {
+            // More debits than credits - add credit to Retained Earnings
+            $accounts[] = [
+                'code' => 'EQ-001',
+                'name' => 'Retained Earnings',
+                'account_type' => 'equity',
+                'total_debit' => 0,
+                'total_credit' => $difference
+            ];
+            $total_credit += $difference;
+        } else {
+            // More credits than debits - add debit to Retained Earnings
+            $accounts[] = [
+                'code' => 'EQ-001',
+                'name' => 'Retained Earnings',
+                'account_type' => 'equity',
+                'total_debit' => abs($difference),
+                'total_credit' => 0
+            ];
+            $total_debit += abs($difference);
         }
     }
     
@@ -827,8 +854,9 @@ function generateBalanceSheet($conn, $as_of_date, $show_subaccounts) {
 
 /**
  * Generate Income Statement - Bank System & Loan Subsystem Data
- * Revenue: Interest, Fees, Loan Interest, Deposits Growth
- * Expenses: Withdrawals, Transfers Out, Rewards, Missions, Payroll
+ * Revenue: Interest Income, Service Fees, Loan Interest Income
+ * Expenses: Payroll, Rewards Points, Operating Expenses
+ * NOTE: Deposits/Withdrawals are balance sheet items, NOT income statement items
  */
 function generateIncomeStatement($conn, $date_from, $date_to, $show_subaccounts) {
     if (empty($date_from)) $date_from = date('Y-01-01');
