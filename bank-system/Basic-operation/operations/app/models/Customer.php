@@ -15,16 +15,15 @@ class Customer extends Database{
                 c.customer_id,
                 c.first_name,
                 c.last_name,
+                c.email,
                 c.password_hash,
                 a.account_number
             FROM
                 bank_customers c
             LEFT JOIN
-                emails e ON c.customer_id = e.customer_id
-            LEFT JOIN
                 customer_accounts a ON c.customer_id = a.customer_id
             WHERE
-                e.email = :emailIdentifier OR a.account_number = :accountIdentifier
+                c.email = :emailIdentifier OR a.account_number = :accountIdentifier
             LIMIT 1;
         ");
 
@@ -60,22 +59,22 @@ class Customer extends Database{
     }
 
     public function getAccountsByCustomerId($customer_id) {
-        // --- 1. FIRST QUERY (GET ACCOUNTS AND BALANCES) ---
+        // Get accounts directly owned by the customer or linked via customer_linked_accounts
         $this->db->query("
             SELECT
                 a.account_id,
                 a.account_number,
+                a.account_type_id,
+                act.type_name AS type_name,
                 act.type_name AS account_type,
-                c.first_name,
-                c.last_name,
-                
+                bc.first_name,
+                bc.last_name,
                 COALESCE(SUM(
                     CASE tt.type_name
-                       WHEN 'Deposit' THEN t.amount
+                        WHEN 'Deposit' THEN t.amount
                         WHEN 'Transfer In' THEN t.amount
                         WHEN 'Interest Payment' THEN t.amount
                         WHEN 'Loan Disbursement' THEN t.amount
-                        -- Debits (will show as negative in the SQL result)
                         WHEN 'Withdrawal' THEN -t.amount
                         WHEN 'Transfer Out' THEN -t.amount
                         WHEN 'Service Charge' THEN -t.amount
@@ -83,22 +82,23 @@ class Customer extends Database{
                         ELSE 0
                     END
                 ), 0) AS current_balance
-                
-            FROM 
-                customer_linked_accounts cla
-            INNER JOIN customer_accounts a ON cla.account_id = a.account_id
-            INNER JOIN bank_customers c ON cla.customer_id = c.customer_id
+            FROM customer_accounts a
+            LEFT JOIN customer_linked_accounts cla ON cla.account_id = a.account_id AND cla.is_active = 1
+            LEFT JOIN bank_customers bc ON bc.customer_id = COALESCE(a.customer_id, cla.customer_id)
             LEFT JOIN bank_account_types act ON a.account_type_id = act.account_type_id
             LEFT JOIN bank_transactions t ON a.account_id = t.account_id
             LEFT JOIN transaction_types tt ON t.transaction_type_id = tt.transaction_type_id
-            WHERE 
-                cla.customer_id = :customer_id AND cla.is_active = 1 AND a.is_locked = 0
-            GROUP BY 
-                a.account_id, a.account_number, act.type_name, c.first_name, c.last_name
+            WHERE (
+                a.customer_id = :cid1
+                OR cla.customer_id = :cid2
+            )
+            AND a.is_locked = 0
+            GROUP BY a.account_id, a.account_number, a.account_type_id, act.type_name, bc.first_name, bc.last_name
             ORDER BY a.created_at DESC;
         ");
 
-        $this->db->bind(':customer_id', $customer_id);
+        $this->db->bind(':cid1', $customer_id);
+        $this->db->bind(':cid2', $customer_id);
         $customer_accounts = $this->db->resultSet();
 
         foreach ($customer_accounts as $account) {
@@ -339,8 +339,8 @@ class Customer extends Database{
                 c.last_name,
                 c.middle_name,
                 -- Account Info
-                (SELECT phone_number FROM phones WHERE customer_id = c.customer_id AND is_primary = 1 LIMIT 1) AS mobile_number,
-                (SELECT email FROM emails WHERE customer_id = c.customer_id AND is_primary = 1 LIMIT 1) AS email_address,
+                c.contact_number AS mobile_number,
+                c.email AS email_address,
                 -- Personal Info
                 cp.date_of_birth,
                 cp.marital_status AS civil_status,
@@ -564,76 +564,36 @@ class Customer extends Database{
         try {
             // Update email if provided
             if (isset($profile_data['email_address']) && !empty($profile_data['email_address'])) {
-                // Check if email record exists
-                $this->db->query("SELECT email_id FROM emails WHERE customer_id = :customer_id AND is_primary = 1 LIMIT 1");
+                // Update email directly in bank_customers
+                $this->db->query("
+                    UPDATE bank_customers 
+                    SET email = :email 
+                    WHERE customer_id = :customer_id
+                ");
+                $this->db->bind(':email', $profile_data['email_address']);
                 $this->db->bind(':customer_id', $customer_id);
-                $email_exists = $this->db->single();
-                
-                if ($email_exists) {
-                    // Update existing email
-                    $this->db->query("
-                        UPDATE emails 
-                        SET email = :email 
-                        WHERE customer_id = :customer_id AND is_primary = 1
-                    ");
-                    $this->db->bind(':email', $profile_data['email_address']);
-                    $this->db->bind(':customer_id', $customer_id);
-                    $result = $this->db->execute();
-                    if (!$result) {
-                        error_log("Failed to update email for customer_id: $customer_id");
-                    }
-                    $success = $result && $success;
-                } else {
-                    // Insert new email
-                    $this->db->query("
-                        INSERT INTO emails (customer_id, email, is_primary, created_at)
-                        VALUES (:customer_id, :email, 1, NOW())
-                    ");
-                    $this->db->bind(':customer_id', $customer_id);
-                    $this->db->bind(':email', $profile_data['email_address']);
-                    $result = $this->db->execute();
-                    if (!$result) {
-                        error_log("Failed to insert email for customer_id: $customer_id");
-                    }
-                    $success = $result && $success;
+                $result = $this->db->execute();
+                if (!$result) {
+                    error_log("Failed to update email for customer_id: $customer_id");
                 }
+                $success = $result && $success;
             }
             
             // Update phone if provided
             if (isset($profile_data['mobile_number']) && !empty($profile_data['mobile_number'])) {
-                // Check if phone record exists
-                $this->db->query("SELECT phone_id FROM phones WHERE customer_id = :customer_id AND is_primary = 1 LIMIT 1");
+                // Update contact_number directly in bank_customers
+                $this->db->query("
+                    UPDATE bank_customers 
+                    SET contact_number = :contact_number 
+                    WHERE customer_id = :customer_id
+                ");
+                $this->db->bind(':contact_number', $profile_data['mobile_number']);
                 $this->db->bind(':customer_id', $customer_id);
-                $phone_exists = $this->db->single();
-                
-                if ($phone_exists) {
-                    // Update existing phone
-                    $this->db->query("
-                        UPDATE phones 
-                        SET phone_number = :phone_number 
-                        WHERE customer_id = :customer_id AND is_primary = 1
-                    ");
-                    $this->db->bind(':phone_number', $profile_data['mobile_number']);
-                    $this->db->bind(':customer_id', $customer_id);
-                    $result = $this->db->execute();
-                    if (!$result) {
-                        error_log("Failed to update phone for customer_id: $customer_id");
-                    }
-                    $success = $result && $success;
-                } else {
-                    // Insert new phone
-                    $this->db->query("
-                        INSERT INTO phones (customer_id, phone_number, phone_type, is_primary, created_at)
-                        VALUES (:customer_id, :phone_number, 'mobile', 1, NOW())
-                    ");
-                    $this->db->bind(':customer_id', $customer_id);
-                    $this->db->bind(':phone_number', $profile_data['mobile_number']);
-                    $result = $this->db->execute();
-                    if (!$result) {
-                        error_log("Failed to insert phone for customer_id: $customer_id");
-                    }
-                    $success = $result && $success;
+                $result = $this->db->execute();
+                if (!$result) {
+                    error_log("Failed to update contact_number for customer_id: $customer_id");
                 }
+                $success = $result && $success;
             }
             
             // Update address parts if provided (address_line, city_id, barangay_id, province_id)
@@ -935,18 +895,18 @@ class Customer extends Database{
         )
         VALUES (
             :transaction_ref,
-            :receiver,
+            :sender,
             :transaction_type,
             :amount,
-            :sender,
+            :receiver,
             :message
         );
         ");
         $this->db->bind(':transaction_ref', $transaction_ref);
-        $this->db->bind(':receiver', $receiver);
-        $this->db->bind(':transaction_type', 9); // Transfer In (ID 9)
+        $this->db->bind(':sender', $receiver);
+        $this->db->bind(':transaction_type', 9);
         $this->db->bind(':amount', $amount);
-        $this->db->bind(':sender', $sender);
+        $this->db->bind(':receiver', $sender);
         $this->db->bind(':message', $message);
         $this->db->execute();
     }
@@ -1154,21 +1114,22 @@ class Customer extends Database{
     {
         $this->db->query("
             SELECT
-                ca.account_number,
                 la.id AS application_id,
+                la.account_number,
                 la.loan_type,
-                la.loan_amount AS remaining_balance, -- NULL if no active loan application
-                DATE_FORMAT(la.created_at, '%M %d, %Y') AS application_date
+                la.loan_amount AS remaining_balance,
+                DATE_FORMAT(la.created_at, '%M %d, %Y') AS application_date,
+                la.status
             FROM
-                customer_accounts ca
-            LEFT JOIN
-                loan_applications la 
-                ON ca.account_number = la.account_number
-                AND la.status = 'Approved'       -- Only join to approved applications
+                loan_applications la
+            INNER JOIN
+                customer_accounts ca ON la.account_number = ca.account_number
             WHERE
                 ca.customer_id = :customer_id
+                AND la.status = 'Active'
+                AND la.loan_amount > 0
             ORDER BY
-                ca.account_number, la.loan_amount DESC;
+                la.created_at DESC;
         ");
         $this->db->bind(':customer_id', $customerId);
         return $this->db->resultSet();
@@ -1188,7 +1149,7 @@ class Customer extends Database{
             SELECT la.id, la.loan_amount, la.status
             FROM loan_applications la
             INNER JOIN customer_accounts ca ON la.account_number = ca.account_number
-            WHERE la.id = :application_id AND ca.customer_id = :customer_id AND la.status = 'Approved'
+            WHERE la.id = :application_id AND ca.customer_id = :customer_id AND la.status = 'Active'
         ");
         $this->db->bind(':application_id', $applicationId);
         $this->db->bind(':customer_id', $customerId);
