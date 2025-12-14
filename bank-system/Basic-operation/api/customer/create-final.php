@@ -353,6 +353,10 @@ try {
             }
         }
         
+        // Generate unique referral code in format EVG#### (e.g., EVG1234)
+        $referralCode = generateReferralCode($db);
+        error_log("Generated referral code: " . $referralCode);
+        
         $stmt = $db->prepare("
             INSERT INTO bank_customers (
                 application_id,
@@ -365,6 +369,7 @@ try {
                 contact_number,
                 birthday,
                 password_hash,
+                referral_code,
                 is_verified,
                 created_at
             ) VALUES (
@@ -378,6 +383,7 @@ try {
                 :contact_number,
                 :birthday,
                 NULL,
+                :referral_code,
                 0,
                 NOW()
             )
@@ -392,10 +398,11 @@ try {
         $stmt->bindParam(':email', $customerEmail);
         $stmt->bindParam(':contact_number', $customerPhone);
         $stmt->bindParam(':birthday', $birthDate);
+        $stmt->bindParam(':referral_code', $referralCode);
         $stmt->execute();
 
         $customerId = $db->lastInsertId();
-        error_log("Created bank_customers record with ID: " . $customerId);
+        error_log("Created bank_customers record with ID: " . $customerId . ", referral_code: " . $referralCode);
         
         // Step 3: Now handle ID image uploads with proper customer_id
         // Upload front image
@@ -484,13 +491,14 @@ try {
         // Clear onboarding session
         unset($_SESSION['customer_onboarding']);
 
-        // Return success with application number (NOT account number yet)
+        // Return success with application number and referral code
         echo json_encode([
             'success' => true,
             'message' => 'Application submitted successfully. Your application is pending approval.',
             'account_number' => $application_number, // Show application number instead
             'customer_id' => $customerId,
             'application_id' => $applicationId,
+            'referral_code' => $referralCode, // Customer's unique referral code (EVG####)
             'status' => 'pending'
         ]);
 
@@ -532,20 +540,17 @@ try {
 }
 
 /**
- * Generate unique referral code
+ * Generate unique referral code in format EVG#### (e.g., EVG1234)
  * @param PDO $db Database connection
  * @return string Unique referral code
  */
-function generateUniqueReferralCode($db) {
+function generateReferralCode($db) {
+    $maxAttempts = 100;
+    $attempt = 0;
+    
     do {
-        // Generate a 6-character code (3 letters + 3 numbers)
-        $code = '';
-        for ($i = 0; $i < 3; $i++) {
-            $code .= chr(rand(65, 90)); // A-Z
-        }
-        for ($i = 0; $i < 3; $i++) {
-            $code .= rand(0, 9); // 0-9
-        }
+        // Generate code in format EVG#### (EVG + 4 random digits)
+        $code = 'EVG' . str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
         
         // Check if code already exists
         $stmt = $db->prepare("SELECT customer_id FROM bank_customers WHERE referral_code = :code LIMIT 1");
@@ -554,9 +559,26 @@ function generateUniqueReferralCode($db) {
         $exists = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
         $stmt->closeCursor();
         
+        $attempt++;
+        
+        if ($attempt >= $maxAttempts) {
+            // If we've tried too many times, add timestamp to make it unique
+            $code = 'EVG' . substr(time(), -4);
+            break;
+        }
+        
     } while ($exists);
     
     return $code;
+}
+
+/**
+ * Generate unique referral code (legacy function - kept for compatibility)
+ * @param PDO $db Database connection
+ * @return string Unique referral code
+ */
+function generateUniqueReferralCode($db) {
+    return generateReferralCode($db);
 }
 
 /**
