@@ -238,7 +238,7 @@ $search = $_GET['search'] ?? '';
 $filter_type = $_GET['filter'] ?? ''; // 'pending', 'approved_month', 'declined_month', 'total_month'
 
 $sql = "SELECT lr.*, 
-        e.first_name, e.last_name, e.employee_id,
+        e.first_name, e.last_name, e.employee_id, e.department_id,
         lt.leave_name,
         u.username as approver_name
         FROM leave_request lr
@@ -248,6 +248,16 @@ $sql = "SELECT lr.*,
         WHERE 1=1";
 
 $params = [];
+
+// Department-scoped filtering for Managers
+// Managers only see leave requests from their department
+if (isManager() && !isAdmin() && !isHRManager()) {
+    $userDeptId = getUserDepartmentId($conn);
+    if ($userDeptId) {
+        $sql .= " AND e.department_id = ?";
+        $params[] = $userDeptId;
+    }
+}
 
 // Handle filter_type from card clicks
 if ($filter_type) {
@@ -295,13 +305,40 @@ try {
     }
 }
 
-// Calculate statistics
+// Calculate statistics - department-scoped for Managers
 try {
+    // Build department filter for stats
+    $deptFilter = "";
+    $deptParams = [];
+    if (isManager() && !isAdmin() && !isHRManager()) {
+        $userDeptId = getUserDepartmentId($conn);
+        if ($userDeptId) {
+            $deptFilter = " AND e.department_id = ?";
+            $deptParams = [$userDeptId];
+        }
+    }
+    
     $stats = [
-        'pending' => (int)fetchOne($conn, "SELECT COUNT(*) as total FROM leave_request WHERE status = 'Pending'")['total'],
-        'approved_this_month' => (int)fetchOne($conn, "SELECT COUNT(*) as total FROM leave_request WHERE status = 'Approved' AND MONTH(date_approved) = MONTH(CURDATE()) AND YEAR(date_approved) = YEAR(CURDATE())")['total'],
-        'rejected_this_month' => (int)fetchOne($conn, "SELECT COUNT(*) as total FROM leave_request WHERE (status = 'Declined' OR status = 'Rejected') AND MONTH(date_approved) = MONTH(CURDATE()) AND YEAR(date_approved) = YEAR(CURDATE())")['total'],
-        'total_this_month' => (int)fetchOne($conn, "SELECT COUNT(*) as total FROM leave_request WHERE MONTH(date_requested) = MONTH(CURDATE()) AND YEAR(date_requested) = YEAR(CURDATE())")['total']
+        'pending' => (int)fetchOne($conn, 
+            "SELECT COUNT(*) as total FROM leave_request lr 
+             INNER JOIN employee e ON lr.employee_id = e.employee_id 
+             WHERE lr.status = 'Pending'" . $deptFilter, 
+            $deptParams)['total'],
+        'approved_this_month' => (int)fetchOne($conn, 
+            "SELECT COUNT(*) as total FROM leave_request lr 
+             INNER JOIN employee e ON lr.employee_id = e.employee_id 
+             WHERE lr.status = 'Approved' AND MONTH(lr.date_approved) = MONTH(CURDATE()) AND YEAR(lr.date_approved) = YEAR(CURDATE())" . $deptFilter, 
+            $deptParams)['total'],
+        'rejected_this_month' => (int)fetchOne($conn, 
+            "SELECT COUNT(*) as total FROM leave_request lr 
+             INNER JOIN employee e ON lr.employee_id = e.employee_id 
+             WHERE (lr.status = 'Declined' OR lr.status = 'Rejected') AND MONTH(lr.date_approved) = MONTH(CURDATE()) AND YEAR(lr.date_approved) = YEAR(CURDATE())" . $deptFilter, 
+            $deptParams)['total'],
+        'total_this_month' => (int)fetchOne($conn, 
+            "SELECT COUNT(*) as total FROM leave_request lr 
+             INNER JOIN employee e ON lr.employee_id = e.employee_id 
+             WHERE MONTH(lr.date_requested) = MONTH(CURDATE()) AND YEAR(lr.date_requested) = YEAR(CURDATE())" . $deptFilter, 
+            $deptParams)['total']
     ];
 } catch (Exception $e) {
     $stats = [
@@ -425,6 +462,29 @@ try {
         .stat-card:hover .stat-icon {
             transform: scale(1.1) rotate(5deg);
             background: rgba(255, 255, 255, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin: 8px 0;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            letter-spacing: -1px;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
         }
 
         .stat-card.pending-card {
@@ -551,8 +611,9 @@ try {
                     <div class="stat-icon">
                         <i class="fas fa-clock text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Pending Requests</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $stats['pending']; ?></p>
+                    <h3 class="stat-title">Pending</h3>
+                    <p class="stat-number"><?php echo $stats['pending']; ?></p>
+                    <p class="stat-label">Awaiting approval</p>
                 </div>
 
                 <div onclick="filterByCard('approved_month')" 
@@ -560,8 +621,9 @@ try {
                     <div class="stat-icon">
                         <i class="fas fa-check-circle text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Approved This Month</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $stats['approved_this_month']; ?></p>
+                    <h3 class="stat-title">Approved</h3>
+                    <p class="stat-number"><?php echo $stats['approved_this_month']; ?></p>
+                    <p class="stat-label">This month</p>
                 </div>
 
                 <div onclick="filterByCard('rejected_month')" 
@@ -569,8 +631,9 @@ try {
                     <div class="stat-icon">
                         <i class="fas fa-times-circle text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Rejected This Month</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $stats['rejected_this_month']; ?></p>
+                    <h3 class="stat-title">Rejected</h3>
+                    <p class="stat-number"><?php echo $stats['rejected_this_month']; ?></p>
+                    <p class="stat-label">This month</p>
                 </div>
 
                 <div onclick="filterByCard('total_month')" 
@@ -578,8 +641,9 @@ try {
                     <div class="stat-icon">
                         <i class="fas fa-calendar-alt text-2xl"></i>
                     </div>
-                    <h3 class="text-xs sm:text-sm font-semibold mb-2">Total This Month</h3>
-                    <p class="text-2xl sm:text-3xl lg:text-4xl font-bold"><?php echo $stats['total_this_month']; ?></p>
+                    <h3 class="stat-title">Total</h3>
+                    <p class="stat-number"><?php echo $stats['total_this_month']; ?></p>
+                    <p class="stat-label">This month</p>
                 </div>
             </div>
 
@@ -660,7 +724,7 @@ try {
                                             <div class="font-medium text-gray-900">
                                                 <?php echo htmlspecialchars(trim(($request['first_name'] ?? '') . ' ' . ($request['last_name'] ?? ''))); ?>
                                             </div>
-                                            <div class="text-xs text-gray-500">ID: <?php echo htmlspecialchars($request['employee_id'] ?? 'N/A'); ?></div>
+                                            <div class="text-xs text-gray-500 font-mono">ID: <?php echo 'EMP-' . str_pad($request['employee_id'] ?? 0, 4, '0', STR_PAD_LEFT); ?></div>
                                     </td>
                                         <td class="px-3 py-2 text-sm text-gray-900">
                                             <?php echo htmlspecialchars($request['leave_name'] ?? 'N/A'); ?>
@@ -759,7 +823,7 @@ try {
                                         <h3 class="font-semibold text-gray-900">
                                             <?php echo htmlspecialchars(trim(($request['first_name'] ?? '') . ' ' . ($request['last_name'] ?? ''))); ?>
                                         </h3>
-                                        <p class="text-xs text-gray-500">ID: <?php echo htmlspecialchars($request['employee_id'] ?? 'N/A'); ?></p>
+                                        <p class="text-xs text-gray-500 font-mono">ID: <?php echo 'EMP-' . str_pad($request['employee_id'] ?? 0, 4, '0', STR_PAD_LEFT); ?></p>
                                     </div>
                                     <?php
                                     $status = $request['status'] ?? 'Pending';

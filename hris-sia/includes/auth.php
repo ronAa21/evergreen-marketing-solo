@@ -3,6 +3,40 @@
 // Set Philippine timezone
 date_default_timezone_set('Asia/Manila');
 
+/**
+ * Format employee ID to standard EMP-XXXX format
+ * @param int|string $employee_id The numeric employee ID
+ * @param int $padding Number of digits to pad (default 4 for EMP-0001 format)
+ * @return string Formatted employee ID (e.g., "EMP-0001")
+ */
+function formatEmployeeId($employee_id, $padding = 4) {
+    if (empty($employee_id)) {
+        return 'N/A';
+    }
+    // Extract numeric part if already has EMP- prefix
+    if (is_string($employee_id) && stripos($employee_id, 'EMP-') === 0) {
+        return strtoupper($employee_id);
+    }
+    // Convert to integer and format
+    $numericId = (int) preg_replace('/[^0-9]/', '', $employee_id);
+    return 'EMP-' . str_pad($numericId, $padding, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Parse employee ID from EMP-XXXX format to numeric
+ * @param string $formatted_id The formatted employee ID (e.g., "EMP-0001" or "1")
+ * @return int|null Numeric employee ID or null if invalid
+ */
+function parseEmployeeId($formatted_id) {
+    if (empty($formatted_id)) {
+        return null;
+    }
+    // Remove EMP- prefix if present and get numeric value
+    $numericId = preg_replace('/^EMP-?/i', '', $formatted_id);
+    $numericId = (int) preg_replace('/[^0-9]/', '', $numericId);
+    return $numericId > 0 ? $numericId : null;
+}
+
 function loginUser($conn, $username, $password) {
     try {
        
@@ -79,8 +113,37 @@ function requireLogin() {
     }
 }
 
+/**
+ * Check if current day is a weekend (Saturday or Sunday)
+ * Uses Asia/Manila timezone for accurate checking
+ * @return bool True if Saturday (6) or Sunday (0)
+ */
+function isWeekend() {
+    $currentDate = new DateTime('now', new DateTimeZone('Asia/Manila'));
+    $dayOfWeek = (int)$currentDate->format('w'); // 0=Sunday, 6=Saturday
+    return ($dayOfWeek === 0 || $dayOfWeek === 6);
+}
+
+/**
+ * Get the name of the current day for display purposes
+ * @return string Day name (e.g., "Saturday", "Sunday")
+ */
+function getCurrentDayName() {
+    $currentDate = new DateTime('now', new DateTimeZone('Asia/Manila'));
+    return $currentDate->format('l'); // Full day name
+}
+
 function recordTimeIn($conn, $employee_id) {
     try {
+        // Block time tracking on weekends
+        if (isWeekend()) {
+            return [
+                "success" => false, 
+                "message" => "Time tracking is not available on weekends. Today is " . getCurrentDayName() . ".",
+                "is_weekend" => true
+            ];
+        }
+        
         // Check if employee already has a time-in today without time-out
         $checkSql = "SELECT attendance_id FROM attendance 
                      WHERE employee_id = ? 
@@ -128,6 +191,15 @@ function recordTimeIn($conn, $employee_id) {
 
 function recordTimeOut($conn, $employee_id) {
     try {
+        // Block time tracking on weekends
+        if (isWeekend()) {
+            return [
+                "success" => false, 
+                "message" => "Time tracking is not available on weekends. Today is " . getCurrentDayName() . ".",
+                "is_weekend" => true
+            ];
+        }
+        
         // Find the active time-in record (no time-out yet)
         $checkSql = "SELECT attendance_id, time_in 
                      FROM attendance 
@@ -240,8 +312,126 @@ function isHRManager() {
     return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'HR Manager';
 }
 
+/**
+ * Check if current user is a Manager
+ * Managers can approve leave requests for employees in their department
+ * @return bool
+ */
+function isManager() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'Manager';
+}
+
+/**
+ * Check if current user is a Supervisor
+ * Supervisors have limited oversight of their team
+ * @return bool
+ */
+function isSupervisor() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'Supervisor';
+}
+
+/**
+ * Check if current user has any management role (Admin, HR Manager, Manager, or Supervisor)
+ * @return bool
+ */
+function hasManagementRole() {
+    return isAdmin() || isHRManager() || isManager() || isSupervisor();
+}
+
+/**
+ * Get the department ID of the current user (from user_account.managed_department_id or employee.department_id)
+ * @param PDO $conn Database connection
+ * @return int|null Department ID or null if not assigned
+ */
+function getUserDepartmentId($conn) {
+    if (!isset($_SESSION['user_id']) && !isset($_SESSION['employee_id'])) {
+        return null;
+    }
+    
+    // For admin users, check if they have a managed department
+    if (isset($_SESSION['user_id'])) {
+        try {
+            $sql = "SELECT ua.managed_department_id, e.department_id 
+                    FROM user_account ua
+                    LEFT JOIN employee e ON ua.employee_id = e.employee_id
+                    WHERE ua.user_id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$_SESSION['user_id']]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Prefer managed_department_id, fall back to employee's department
+            return $result['managed_department_id'] ?? $result['department_id'] ?? null;
+        } catch (Exception $e) {
+            error_log("Error getting user department: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    // For employees, get their department from the employee table
+    if (isset($_SESSION['employee_id'])) {
+        try {
+            $sql = "SELECT department_id FROM employee WHERE employee_id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$_SESSION['employee_id']]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result['department_id'] ?? null;
+        } catch (Exception $e) {
+            error_log("Error getting employee department: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Check if the current user can approve leaves for a specific employee
+ * - Admins and HR Managers can approve all leaves
+ * - Managers can approve leaves for employees in their department
+ * - Supervisors cannot approve leaves (view only)
+ * @param PDO $conn Database connection
+ * @param int $employee_id The employee ID whose leave is being approved
+ * @return bool
+ */
+function canApproveLeavesForEmployee($conn, $employee_id) {
+    // Admins and HR Managers can approve all leaves
+    if (isAdmin() || isHRManager()) {
+        return true;
+    }
+    
+    // Managers can approve leaves for their department
+    if (isManager()) {
+        $userDeptId = getUserDepartmentId($conn);
+        if ($userDeptId) {
+            try {
+                $sql = "SELECT department_id FROM employee WHERE employee_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->execute([$employee_id]);
+                $emp = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                return $emp && $emp['department_id'] == $userDeptId;
+            } catch (Exception $e) {
+                error_log("Error checking leave approval permission: " . $e->getMessage());
+                return false;
+            }
+        }
+    }
+    
+    return false;
+}
+
 function requireAdmin() {
     if (!isAdmin()) {
+        header('Location: dashboard.php');
+        exit;
+    }
+}
+
+/**
+ * Require Manager or higher role
+ */
+function requireManager() {
+    if (!isAdmin() && !isHRManager() && !isManager()) {
         header('Location: dashboard.php');
         exit;
     }
@@ -256,7 +446,9 @@ function canManageEmployees() {
 }
 
 function canManageLeaves() {
-    return isAdmin() || isHRManager();
+    // Admins, HR Managers, and Managers can manage leaves
+    // (Managers only for their department - enforced separately)
+    return isAdmin() || isHRManager() || isManager();
 }
 
 function canManageRecruitment() {
@@ -265,6 +457,136 @@ function canManageRecruitment() {
 
 function canViewLogs() {
     return isAdmin();
+}
+
+/**
+ * Check if current user can manage user roles
+ * Only Admins can assign/change roles
+ * @return bool
+ */
+function canManageRoles() {
+    return isAdmin();
+}
+
+/**
+ * Get all employees with their current roles and departments for role management
+ * @param PDO $conn Database connection
+ * @return array List of employees with role info
+ */
+function getAllEmployeesWithRoles($conn) {
+    try {
+        $sql = "SELECT 
+                    e.employee_id,
+                    CONCAT(e.first_name, ' ', e.last_name) as full_name,
+                    e.email,
+                    e.department_id,
+                    d.department_name,
+                    p.position_title,
+                    e.employment_status,
+                    ua.user_id,
+                    ua.username,
+                    ua.role,
+                    ua.managed_department_id,
+                    md.department_name as managed_department_name
+                FROM employee e
+                LEFT JOIN department d ON e.department_id = d.department_id
+                LEFT JOIN position p ON e.position_id = p.position_id
+                LEFT JOIN user_account ua ON e.employee_id = ua.employee_id
+                LEFT JOIN department md ON ua.managed_department_id = md.department_id
+                WHERE e.employment_status = 'Active'
+                ORDER BY e.last_name, e.first_name";
+        
+        return fetchAll($conn, $sql);
+    } catch (Exception $e) {
+        error_log("Error fetching employees with roles: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Update user role and department assignment
+ * @param PDO $conn Database connection
+ * @param int $employee_id Employee ID
+ * @param string $new_role New role to assign
+ * @param int|null $managed_department_id Department ID for Managers/Supervisors
+ * @param int $changed_by User ID who made the change
+ * @return array Result with success status and message
+ */
+function updateUserRole($conn, $employee_id, $new_role, $managed_department_id, $changed_by) {
+    try {
+        $valid_roles = ['Admin', 'HR Manager', 'Manager', 'Supervisor', 'Employee'];
+        if (!in_array($new_role, $valid_roles)) {
+            return ['success' => false, 'message' => 'Invalid role'];
+        }
+        
+        // Check if user_account exists for this employee
+        $existing = fetchOne($conn, "SELECT user_id, role, managed_department_id FROM user_account WHERE employee_id = ?", [$employee_id]);
+        
+        if ($existing) {
+            // Update existing user account
+            $old_role = $existing['role'];
+            $old_dept = $existing['managed_department_id'];
+            
+            $sql = "UPDATE user_account SET role = ?, managed_department_id = ? WHERE employee_id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$new_role, $managed_department_id, $employee_id]);
+            
+            // Log the role change
+            logRoleChange($conn, $existing['user_id'], $changed_by, $old_role, $new_role, $old_dept, $managed_department_id);
+            
+            return ['success' => true, 'message' => "Role updated to $new_role"];
+        } else {
+            // Create new user account for this employee
+            $employee = fetchOne($conn, "SELECT first_name, last_name FROM employee WHERE employee_id = ?", [$employee_id]);
+            if (!$employee) {
+                return ['success' => false, 'message' => 'Employee not found'];
+            }
+            
+            // Generate username from employee name
+            $username = strtolower(substr($employee['first_name'], 0, 1) . $employee['last_name']);
+            $username = preg_replace('/[^a-z0-9]/', '', $username);
+            
+            // Check for duplicate username and append number if needed
+            $baseUsername = $username;
+            $counter = 1;
+            while (fetchOne($conn, "SELECT user_id FROM user_account WHERE username = ?", [$username])) {
+                $username = $baseUsername . $counter;
+                $counter++;
+            }
+            
+            // Default password hash for 'password' - should be changed on first login
+            $default_password = password_hash('password', PASSWORD_DEFAULT);
+            
+            $sql = "INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id) VALUES (?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$employee_id, $username, $default_password, $new_role, $managed_department_id]);
+            
+            $new_user_id = $conn->lastInsertId();
+            
+            // Log the role assignment
+            logRoleChange($conn, $new_user_id, $changed_by, null, $new_role, null, $managed_department_id);
+            
+            return ['success' => true, 'message' => "Account created for $username with role $new_role. Default password: 'password'"];
+        }
+    } catch (Exception $e) {
+        error_log("Error updating user role: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to update role: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Log role change for audit trail
+ */
+function logRoleChange($conn, $user_id, $changed_by, $old_role, $new_role, $old_dept, $new_dept) {
+    try {
+        $sql = "INSERT INTO role_change_log (user_id, changed_by, old_role, new_role, old_department_id, new_department_id) 
+                VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([$user_id, $changed_by, $old_role, $new_role, $old_dept, $new_dept]);
+    } catch (Exception $e) {
+        // Table might not exist yet, log but don't fail
+        error_log("Role change log failed (table may not exist): " . $e->getMessage());
+    }
 }
 
 function loginEmployee($conn, $employee_id_input, $employee_name) {

@@ -88,7 +88,7 @@ $payslips = fetchAll($conn,
 // Get employee info with department and position
 $employee = fetchOne($conn, 
     "SELECT e.employee_id, e.first_name, e.last_name, 
-            CONCAT('EMP', LPAD(e.employee_id, 3, '0')) as employee_no,
+            CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as employee_no,
             d.department_name, p.position_title, e.hire_date
      FROM employee e
      LEFT JOIN department d ON e.department_id = d.department_id
@@ -177,6 +177,38 @@ try {
     ) ?: ['count' => 0];
 } catch (Exception $e) {
     $payslipCount = ['count' => 0];
+}
+
+// Handle RSVP update
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_rsvp'])) {
+    try {
+        $stmt = $conn->prepare("UPDATE event_participants SET rsvp_status = ?, rsvp_date = NOW() WHERE id = ? AND employee_id = ?");
+        $stmt->execute([$_POST['rsvp_status'], $_POST['participant_id'], $employee_id]);
+        $message = "RSVP updated successfully!";
+        $messageType = "success";
+    } catch (Exception $e) {
+        $message = "Error updating RSVP: " . $e->getMessage();
+        $messageType = "error";
+    }
+}
+
+// Get event invites for this employee
+$eventInvites = [];
+try {
+    $eventInvites = fetchAll($conn,
+        "SELECT ep.id as participant_id, ep.rsvp_status, ep.rsvp_date,
+                r.recruitment_id, r.job_title as event_name, r.date_posted as event_date,
+                d.department_name
+         FROM event_participants ep
+         JOIN recruitment r ON ep.event_id = r.recruitment_id
+         LEFT JOIN department d ON r.department_id = d.department_id
+         WHERE ep.employee_id = ?
+         ORDER BY r.date_posted DESC
+         LIMIT 10",
+        [$employee_id]
+    ) ?: [];
+} catch (Exception $e) {
+    $eventInvites = [];
 }
 ?>
 <!DOCTYPE html>
@@ -468,6 +500,63 @@ try {
                                                 <p class="text-xs text-gray-600 mt-1"><?php echo number_format($att['total_hours'], 1); ?>h</p>
                                             <?php endif; ?>
                                         </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Event Invites -->
+                    <div class="card-enhanced p-5">
+                        <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-calendar-check text-purple-600 mr-2"></i>Event Invites
+                        </h2>
+                        <?php if (empty($eventInvites)): ?>
+                            <p class="text-gray-500 text-sm text-center py-4">No event invitations</p>
+                        <?php else: ?>
+                            <div class="space-y-3">
+                                <?php foreach ($eventInvites as $invite): ?>
+                                    <div class="p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <p class="text-sm font-semibold text-gray-800">
+                                                <?php echo htmlspecialchars($invite['event_name']); ?>
+                                            </p>
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full <?php
+                                                echo match($invite['rsvp_status']) {
+                                                    'Accepted' => 'bg-green-100 text-green-800',
+                                                    'Declined' => 'bg-red-100 text-red-800',
+                                                    'Maybe' => 'bg-blue-100 text-blue-800',
+                                                    default => 'bg-yellow-100 text-yellow-800'
+                                                };
+                                            ?>">
+                                                <?php echo htmlspecialchars($invite['rsvp_status']); ?>
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mb-2">
+                                            <i class="fas fa-calendar mr-1"></i><?php echo date('M d, Y', strtotime($invite['event_date'])); ?>
+                                            <?php if ($invite['department_name']): ?>
+                                                <span class="mx-2">•</span>
+                                                <i class="fas fa-building mr-1"></i><?php echo htmlspecialchars($invite['department_name']); ?>
+                                            <?php endif; ?>
+                                        </p>
+                                        <?php if ($invite['rsvp_status'] === 'Pending'): ?>
+                                            <form method="POST" class="flex gap-2 mt-2">
+                                                <input type="hidden" name="update_rsvp" value="1">
+                                                <input type="hidden" name="participant_id" value="<?php echo $invite['participant_id']; ?>">
+                                                <button type="submit" name="rsvp_status" value="Accepted" 
+                                                        class="flex-1 px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition">
+                                                    <i class="fas fa-check mr-1"></i>Accept
+                                                </button>
+                                                <button type="submit" name="rsvp_status" value="Declined" 
+                                                        class="flex-1 px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition">
+                                                    <i class="fas fa-times mr-1"></i>Decline
+                                                </button>
+                                                <button type="submit" name="rsvp_status" value="Maybe" 
+                                                        class="flex-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+                                                    <i class="fas fa-question mr-1"></i>Maybe
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
