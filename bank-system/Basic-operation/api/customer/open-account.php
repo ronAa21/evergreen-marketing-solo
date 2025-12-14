@@ -293,6 +293,21 @@ try {
         // Create a pending account_applications record with data from existing application + new ID info
         if ($existingApplication && $idFrontPath && $idBackPath) {
             
+            // Process selected cards and additional services from input
+            $selectedCards = '';
+            if (isset($input['selected_cards'])) {
+                $selectedCards = is_array($input['selected_cards']) 
+                    ? implode(',', $input['selected_cards']) 
+                    : $input['selected_cards'];
+            }
+            
+            $additionalServices = '';
+            if (isset($input['additional_services'])) {
+                $additionalServices = is_array($input['additional_services']) 
+                    ? implode(',', $input['additional_services']) 
+                    : $input['additional_services'];
+            }
+            
             $stmt = $db->prepare("
                 INSERT INTO account_applications (
                     application_number,
@@ -320,8 +335,11 @@ try {
                     occupation,
                     annual_income,
                     account_type,
+                    selected_cards,
+                    additional_services,
                     terms_accepted,
                     privacy_acknowledged,
+                    marketing_consent,
                     submitted_at
                 ) VALUES (
                     :application_number,
@@ -349,8 +367,11 @@ try {
                     :occupation,
                     :annual_income,
                     :account_type,
+                    :selected_cards,
+                    :additional_services,
                     1,
                     1,
+                    0,
                     NOW()
                 )
             ");
@@ -379,25 +400,40 @@ try {
             $stmt->bindValue(':occupation', $existingApplication['occupation'] ?? 'N/A');
             $stmt->bindValue(':annual_income', $existingApplication['annual_income'] ?? 0);
             $stmt->bindParam(':account_type', $input['account_type']);
+            $stmt->bindValue(':selected_cards', $selectedCards);
+            $stmt->bindValue(':additional_services', $additionalServices);
             $stmt->execute();
             
             $newApplicationId = $db->lastInsertId();
             
             // Insert ID documents into application_documents table
+            // Extract file names from paths
+            $idFrontFileName = basename($idFrontPath);
+            $idBackFileName = basename($idBackPath);
+            
+            // Insert front ID document
             $docStmt = $db->prepare("
                 INSERT INTO application_documents (
                     application_id,
                     document_type,
+                    file_name,
                     file_path,
                     uploaded_at
-                ) VALUES 
-                (:app_id, 'id_front', :id_front, NOW()),
-                (:app_id2, 'id_back', :id_back, NOW())
+                ) VALUES (:app_id, :doc_type, :file_name, :file_path, NOW())
             ");
             $docStmt->bindParam(':app_id', $newApplicationId);
-            $docStmt->bindParam(':app_id2', $newApplicationId);
-            $docStmt->bindParam(':id_front', $idFrontPath);
-            $docStmt->bindParam(':id_back', $idBackPath);
+            $docType = 'id_front';
+            $docStmt->bindParam(':doc_type', $docType);
+            $docStmt->bindParam(':file_name', $idFrontFileName);
+            $docStmt->bindParam(':file_path', $idFrontPath);
+            $docStmt->execute();
+            
+            // Insert back ID document
+            $docType = 'id_back';
+            $docStmt->bindParam(':app_id', $newApplicationId);
+            $docStmt->bindParam(':doc_type', $docType);
+            $docStmt->bindParam(':file_name', $idBackFileName);
+            $docStmt->bindParam(':file_path', $idBackPath);
             $docStmt->execute();
         }
         

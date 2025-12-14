@@ -1698,40 +1698,93 @@ class Customer extends Database{
     public function getAccountApplicationsByEmail($email) {
         $this->db->query("
             SELECT 
-                application_id,
-                application_number,
-                application_status,
-                first_name,
-                last_name,
-                email,
-                phone_number,
-                date_of_birth,
-                street_address,
-                barangay,
-                city,
-                state,
-                zip_code,
-                ssn,
-                id_type,
-                id_number,
-                employment_status,
-                employer_name,
-                job_title,
-                annual_income,
-                account_type,
-                selected_cards,
-                additional_services,
-                terms_accepted,
-                privacy_acknowledged,
-                marketing_consent,
-                submitted_at,
-                reviewed_at
-            FROM account_applications
-            WHERE email = :email
-            ORDER BY submitted_at DESC
+                aa.application_id,
+                aa.application_number,
+                aa.application_status,
+                aa.first_name,
+                aa.last_name,
+                aa.email,
+                aa.phone_number,
+                aa.date_of_birth,
+                aa.street_address,
+                b.barangay_name AS barangay,
+                c.city_name AS city,
+                p.province_name AS state,
+                aa.postal_code AS zip_code,
+                aa.id_type,
+                aa.id_number,
+                aa.employment_status,
+                aa.employer_name,
+                aa.occupation AS job_title,
+                aa.annual_income,
+                aa.account_type,
+                aa.selected_cards,
+                aa.additional_services,
+                aa.terms_accepted,
+                aa.privacy_acknowledged,
+                aa.marketing_consent,
+                aa.submitted_at,
+                aa.reviewed_at,
+                aa.rejection_reason
+            FROM account_applications aa
+            LEFT JOIN barangays b ON aa.barangay_id = b.barangay_id
+            LEFT JOIN cities c ON aa.city_id = c.city_id
+            LEFT JOIN provinces p ON aa.province_id = p.province_id
+            WHERE aa.email = :email
+            ORDER BY aa.submitted_at DESC
         ");
         
         $this->db->bind(':email', $email);
+        return $this->db->resultSet();
+    }
+
+    /**
+     * Get all account applications for a customer by customer_id
+     * Fetches all applications regardless of status (pending, approved, rejected)
+     * 
+     * @param int $customerId Customer ID
+     * @return array|false Array of applications or false on failure
+     */
+    public function getAccountApplicationsByCustomerId($customerId) {
+        $this->db->query("
+            SELECT 
+                aa.application_id,
+                aa.application_number,
+                aa.application_status,
+                aa.first_name,
+                aa.last_name,
+                aa.email,
+                aa.phone_number,
+                aa.date_of_birth,
+                aa.street_address,
+                b.barangay_name AS barangay,
+                c.city_name AS city,
+                p.province_name AS state,
+                aa.postal_code AS zip_code,
+                aa.id_type,
+                aa.id_number,
+                aa.employment_status,
+                aa.employer_name,
+                aa.occupation AS job_title,
+                aa.annual_income,
+                aa.account_type,
+                aa.selected_cards,
+                aa.additional_services,
+                aa.terms_accepted,
+                aa.privacy_acknowledged,
+                aa.marketing_consent,
+                aa.submitted_at,
+                aa.reviewed_at,
+                aa.rejection_reason
+            FROM account_applications aa
+            LEFT JOIN barangays b ON aa.barangay_id = b.barangay_id
+            LEFT JOIN cities c ON aa.city_id = c.city_id
+            LEFT JOIN provinces p ON aa.province_id = p.province_id
+            WHERE aa.customer_id = :customer_id
+            ORDER BY aa.submitted_at DESC
+        ");
+        
+        $this->db->bind(':customer_id', $customerId);
         return $this->db->resultSet();
     }
 }

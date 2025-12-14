@@ -278,8 +278,8 @@ try {
                 email, phone_number,
                 street_address, barangay_id, city_id, province_id, postal_code,
                 id_type, id_number,
-                employment_status, employer_name, occupation, annual_income,
-                account_type, terms_accepted,
+                employment_status, employer_name, occupation, annual_income, source_of_funds,
+                account_type, terms_accepted, privacy_acknowledged,
                 submitted_at
             ) VALUES (
                 :application_number, 'pending',
@@ -288,8 +288,8 @@ try {
                 :email, :phone_number,
                 :street_address, :barangay_id, :city_id, :province_id, :postal_code,
                 :id_type, :id_number,
-                :employment_status, :employer_name, :occupation, :annual_income,
-                :account_type, 1,
+                :employment_status, :employer_name, :occupation, :annual_income, :source_of_funds,
+                :account_type, 1, 1,
                 NOW()
             )
         ");
@@ -316,6 +316,7 @@ try {
         $stmt->bindParam(':employer_name', $mappedData['employer_name']);
         $stmt->bindParam(':occupation', $mappedData['occupation']);
         $stmt->bindParam(':annual_income', $mappedData['annual_income']);
+        $stmt->bindParam(':source_of_funds', $mappedData['source_of_funds']);
         $stmt->bindParam(':account_type', $accountTypeBase);
         $stmt->execute();
 

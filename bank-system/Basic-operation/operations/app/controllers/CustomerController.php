@@ -1180,29 +1180,46 @@ class CustomerController extends Controller {
     /**
      * View Account Applications Status
      * Shows all account applications for the logged-in customer
+     * Fetches ALL applications (pending, approved, rejected) with rejection reasons
      * Access via: /customer/account_applications
      */
     public function account_applications() {
-        // Get customer email from session or customer data
-        $customerEmail = $_SESSION['customer_email'] ?? null;
-        
-        // If email not in session, try to get it from customer data
-        if (!$customerEmail && isset($_SESSION['customer_id'])) {
-            // Get email from emails table using the parent controller's database connection
-            $this->db->query("
-                SELECT email FROM emails 
-                WHERE customer_id = :customer_id 
-                ORDER BY is_primary DESC, created_at ASC 
-                LIMIT 1
-            ");
-            $this->db->bind(':customer_id', $_SESSION['customer_id']);
-            $emailResult = $this->db->single();
-            $customerEmail = $emailResult->email ?? null;
-        }
-
         $applications = [];
-        if ($customerEmail) {
-            $applications = $this->customerModel->getAccountApplicationsByEmail($customerEmail);
+        
+        // First try to get applications by customer_id (most reliable)
+        if (isset($_SESSION['customer_id'])) {
+            $applications = $this->customerModel->getAccountApplicationsByCustomerId($_SESSION['customer_id']);
+        }
+        
+        // Fallback: If no applications found by customer_id, try by email
+        if (empty($applications)) {
+            $customerEmail = $_SESSION['customer_email'] ?? null;
+            
+            // If email not in session, try to get it from customer data
+            if (!$customerEmail && isset($_SESSION['customer_id'])) {
+                // Get email from emails table using the parent controller's database connection
+                $this->db->query("
+                    SELECT email FROM emails 
+                    WHERE customer_id = :customer_id 
+                    ORDER BY is_primary DESC, created_at ASC 
+                    LIMIT 1
+                ");
+                $this->db->bind(':customer_id', $_SESSION['customer_id']);
+                $emailResult = $this->db->single();
+                $customerEmail = $emailResult->email ?? null;
+            }
+            
+            // Also try bank_customers email
+            if (!$customerEmail && isset($_SESSION['customer_id'])) {
+                $this->db->query("SELECT email FROM bank_customers WHERE customer_id = :customer_id");
+                $this->db->bind(':customer_id', $_SESSION['customer_id']);
+                $bcResult = $this->db->single();
+                $customerEmail = $bcResult->email ?? null;
+            }
+
+            if ($customerEmail) {
+                $applications = $this->customerModel->getAccountApplicationsByEmail($customerEmail);
+            }
         }
 
         // Format applications data
@@ -1243,18 +1260,17 @@ class CustomerController extends Controller {
                 'phone_number' => $app->phone_number,
                 'date_of_birth' => $dateOfBirth,
                 'street_address' => $app->street_address,
-                'barangay' => $app->barangay,
-                'city' => $app->city,
-                'state' => $app->state,
-                'zip_code' => $app->zip_code,
+                'barangay' => $app->barangay ?? '',
+                'city' => $app->city ?? '',
+                'state' => $app->state ?? '',
+                'zip_code' => $app->zip_code ?? '',
                 'full_address' => trim(implode(', ', array_filter([
                     $app->street_address,
-                    $app->barangay,
-                    $app->city,
-                    $app->state,
-                    $app->zip_code
+                    $app->barangay ?? '',
+                    $app->city ?? '',
+                    $app->state ?? '',
+                    $app->zip_code ?? ''
                 ]))),
-                'ssn' => $app->ssn,
                 'id_type' => $app->id_type,
                 'id_number' => $app->id_number,
                 'employment_status' => $app->employment_status,
@@ -1265,7 +1281,8 @@ class CustomerController extends Controller {
                 'selected_cards' => $selectedCards,
                 'additional_services' => $additionalServices,
                 'submitted_at' => $submittedAt,
-                'reviewed_at' => $reviewedAt
+                'reviewed_at' => $reviewedAt,
+                'rejection_reason' => $app->rejection_reason ?? null
             ];
         }
 

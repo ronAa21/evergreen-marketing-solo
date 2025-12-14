@@ -171,7 +171,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             mkdir($uploadDir, 0755, true);
         }
         
-        // Insert into account_applications table (matching create-final.php structure)
+        // Process selected cards and additional services
+        $selectedCards = '';
+        if (isset($data['selectedCards']) && is_array($data['selectedCards'])) {
+            $selectedCards = implode(',', $data['selectedCards']);
+        } elseif (isset($data['selectedCards']) && is_string($data['selectedCards'])) {
+            $selectedCards = $data['selectedCards'];
+        }
+        
+        $additionalServices = '';
+        if (isset($data['additionalServices']) && is_array($data['additionalServices'])) {
+            $additionalServices = implode(',', $data['additionalServices']);
+        } elseif (isset($data['additionalServices']) && is_string($data['additionalServices'])) {
+            $additionalServices = $data['additionalServices'];
+        }
+        
+        // Privacy and marketing consent
+        $privacyAcknowledged = isset($data['privacyAcknowledged']) ? 1 : 1; // Default to 1 if form submitted
+        $marketingConsent = isset($data['marketingConsent']) && $data['marketingConsent'] ? 1 : 0;
+        
+        // Insert into account_applications table (matching unified_schema.sql structure)
         $sql = "INSERT INTO account_applications (
             application_number, application_status, customer_id,
             first_name, middle_name, last_name, 
@@ -180,7 +199,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             street_address, barangay_id, city_id, province_id, postal_code,
             id_type, id_number,
             employment_status, employer_name, occupation, annual_income, source_of_funds,
-            account_type, terms_accepted,
+            account_type, selected_cards, additional_services,
+            terms_accepted, privacy_acknowledged, marketing_consent,
             submitted_at
         ) VALUES (
             ?, 'pending', ?,
@@ -190,7 +210,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             ?, ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?,
+            ?, ?, ?,
+            ?, ?, ?,
             NOW()
         )";
         
@@ -201,7 +222,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         
         $stmt->bind_param(
-            "sissssssssssiiiissssssdssi",
+            "sisssssssssssiiissssssdssssiii",
             $applicationNumber,
             $customer_id,
             $firstName, $middleName, $lastName,
@@ -210,7 +231,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $streetAddress, $barangayId, $cityId, $provinceId, $postalCode,
             $idType, $idNumber,
             $employmentStatus, $employerName, $occupation, $annualIncome, $sourceOfFunds,
-            $accountType, $termsAccepted
+            $accountType, $selectedCards, $additionalServices,
+            $termsAccepted, $privacyAcknowledged, $marketingConsent
         );
         
         if (!$stmt->execute()) {

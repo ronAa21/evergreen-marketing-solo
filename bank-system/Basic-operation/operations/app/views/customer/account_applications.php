@@ -53,7 +53,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
 
     <!--------------------------- STATISTICS CARDS --------------------------------------------------------------------------------->
     <div class="row mb-4 g-3">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -68,7 +68,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -83,7 +83,7 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -93,6 +93,21 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                         </div>
                         <div class="bg-success bg-opacity-10 rounded-circle p-3">
                             <i class="bi bi-check-circle text-success" style="font-size: 1.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1 small">Rejected</p>
+                            <h3 class="mb-0 fw-bold text-danger"><?= $data['rejected_count'] ?></h3>
+                        </div>
+                        <div class="bg-danger bg-opacity-10 rounded-circle p-3">
+                            <i class="bi bi-x-circle text-danger" style="font-size: 1.5rem;"></i>
                         </div>
                     </div>
                 </div>
@@ -218,6 +233,13 @@ require_once ROOT_PATH . '/app/views/layouts/header.php';
                                         <div class="mb-2">
                                             <span class="info-label">Reviewed At:</span>
                                             <span class="info-value d-block small"><?= htmlspecialchars($app['reviewed_at']) ?></span>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <?php if (strtolower($app['application_status']) === 'rejected' && !empty($app['rejection_reason'])): ?>
+                                        <div class="mt-3 p-3 bg-danger bg-opacity-10 rounded">
+                                            <span class="info-label text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Rejection Reason:</span>
+                                            <span class="info-value d-block mt-1 text-danger"><?= htmlspecialchars($app['rejection_reason']) ?></span>
                                         </div>
                                     <?php endif; ?>
                                 </div>

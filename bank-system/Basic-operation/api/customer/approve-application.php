@@ -177,7 +177,140 @@ try {
         $stmt->bindParam(':account_id', $accountId);
         $stmt->execute();
         
-        // 7. Update application status to approved
+        // 7. Create customer_profiles record with personal details from application
+        // Check if profile already exists
+        $checkStmt = $db->prepare("SELECT profile_id FROM customer_profiles WHERE customer_id = :customer_id");
+        $checkStmt->bindParam(':customer_id', $customerId);
+        $checkStmt->execute();
+        
+        if (!$checkStmt->fetch()) {
+            // Get gender_id from genders table
+            $genderId = null;
+            if (!empty($application['gender'])) {
+                $genderStmt = $db->prepare("SELECT gender_id FROM genders WHERE gender_name = :gender_name");
+                $genderStmt->bindParam(':gender_name', $application['gender']);
+                $genderStmt->execute();
+                $genderResult = $genderStmt->fetch(PDO::FETCH_ASSOC);
+                $genderId = $genderResult['gender_id'] ?? null;
+            }
+            
+            $stmt = $db->prepare("
+                INSERT INTO customer_profiles (
+                    customer_id,
+                    gender_id,
+                    date_of_birth,
+                    marital_status,
+                    nationality,
+                    occupation,
+                    income_range
+                ) VALUES (
+                    :customer_id,
+                    :gender_id,
+                    :date_of_birth,
+                    :marital_status,
+                    :nationality,
+                    :occupation,
+                    :income_range
+                )
+            ");
+            $stmt->bindParam(':customer_id', $customerId);
+            $stmt->bindParam(':gender_id', $genderId);
+            $stmt->bindParam(':date_of_birth', $application['date_of_birth']);
+            $stmt->bindParam(':marital_status', $application['civil_status']);
+            $stmt->bindParam(':nationality', $application['nationality']);
+            $stmt->bindParam(':occupation', $application['occupation']);
+            $incomeRange = $application['annual_income'] ? number_format($application['annual_income'], 0) : null;
+            $stmt->bindParam(':income_range', $incomeRange);
+            $stmt->execute();
+            error_log("Created customer_profiles record for customer_id: " . $customerId);
+        }
+        
+        // 8. Create addresses record with address details from application
+        // Check if address already exists
+        $checkStmt = $db->prepare("SELECT address_id FROM addresses WHERE customer_id = :customer_id AND is_primary = 1");
+        $checkStmt->bindParam(':customer_id', $customerId);
+        $checkStmt->execute();
+        
+        if (!$checkStmt->fetch()) {
+            $stmt = $db->prepare("
+                INSERT INTO addresses (
+                    customer_id,
+                    address_line,
+                    barangay_id,
+                    city_id,
+                    province_id,
+                    postal_code,
+                    address_type,
+                    is_primary
+                ) VALUES (
+                    :customer_id,
+                    :address_line,
+                    :barangay_id,
+                    :city_id,
+                    :province_id,
+                    :postal_code,
+                    'home',
+                    1
+                )
+            ");
+            $stmt->bindParam(':customer_id', $customerId);
+            $stmt->bindParam(':address_line', $application['street_address']);
+            $stmt->bindParam(':barangay_id', $application['barangay_id']);
+            $stmt->bindParam(':city_id', $application['city_id']);
+            $stmt->bindParam(':province_id', $application['province_id']);
+            $stmt->bindParam(':postal_code', $application['postal_code']);
+            $stmt->execute();
+            error_log("Created addresses record for customer_id: " . $customerId);
+        }
+        
+        // 9. Create emails record if email exists
+        if (!empty($application['email'])) {
+            $checkStmt = $db->prepare("SELECT email_id FROM emails WHERE customer_id = :customer_id AND email = :email");
+            $checkStmt->bindParam(':customer_id', $customerId);
+            $checkStmt->bindParam(':email', $application['email']);
+            $checkStmt->execute();
+            
+            if (!$checkStmt->fetch()) {
+                $stmt = $db->prepare("
+                    INSERT INTO emails (customer_id, email, is_primary)
+                    VALUES (:customer_id, :email, 1)
+                ");
+                $stmt->bindParam(':customer_id', $customerId);
+                $stmt->bindParam(':email', $application['email']);
+                $stmt->execute();
+                error_log("Created emails record for customer_id: " . $customerId);
+            }
+        }
+        
+        // 10. Create phones record if phone exists
+        if (!empty($application['phone_number'])) {
+            $checkStmt = $db->prepare("SELECT phone_id FROM phones WHERE customer_id = :customer_id AND phone_number = :phone_number");
+            $checkStmt->bindParam(':customer_id', $customerId);
+            $checkStmt->bindParam(':phone_number', $application['phone_number']);
+            $checkStmt->execute();
+            
+            if (!$checkStmt->fetch()) {
+                $stmt = $db->prepare("
+                    INSERT INTO phones (customer_id, phone_number, phone_type, is_primary)
+                    VALUES (:customer_id, :phone_number, 'mobile', 1)
+                ");
+                $stmt->bindParam(':customer_id', $customerId);
+                $stmt->bindParam(':phone_number', $application['phone_number']);
+                $stmt->execute();
+                error_log("Created phones record for customer_id: " . $customerId);
+            }
+        }
+        
+        // 11. Update bank_customers with is_active = 1 (now approved)
+        $stmt = $db->prepare("
+            UPDATE bank_customers 
+            SET is_active = 1, is_verified = 1
+            WHERE customer_id = :customer_id
+        ");
+        $stmt->bindParam(':customer_id', $customerId);
+        $stmt->execute();
+        
+        // 12. Update application status to approved
         $stmt = $db->prepare("
             UPDATE account_applications 
             SET application_status = 'approved',
