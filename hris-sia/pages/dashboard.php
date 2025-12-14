@@ -232,16 +232,15 @@ $applicantsList = fetchAll($conn,
 );
 $applicantsList = $applicantsList ?: [];
 
-// Get detailed events (recruitment) list for modal - filtered for supervisors
+// Get detailed events (recruitment) list for modal - fetch entire year for chart filtering
 $eventsList = fetchAll($conn,
     "SELECT r.recruitment_id, r.job_title, r.date_posted, r.status,
             d.department_name
      FROM recruitment r
      LEFT JOIN department d ON r.department_id = d.department_id
-     WHERE MONTH(r.date_posted) = MONTH(CURDATE()) 
-     AND YEAR(r.date_posted) = YEAR(CURDATE())" . $deptFilterSQLRecruitment . "
+     WHERE YEAR(r.date_posted) = YEAR(CURDATE())" . $deptFilterSQLRecruitment . "
      ORDER BY r.date_posted DESC
-     LIMIT 50"
+     LIMIT 100"
 );
 $eventsList = $eventsList ?: [];
 
@@ -894,10 +893,10 @@ $stats['pending_leaves'] = $pendingLeaves;
                         const year = new Date(row.hire_date).getFullYear().toString();
                         return year === filterLabel;
                     }
-                    // For applicants, filter by created_at or application date (if available)
-                    if (type === 'applicants' && row.created_at) {
-                        const monthYear = new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                        return monthYear.includes(filterLabel);
+                    // For applicants, filter by date_posted (recruitment posting date)
+                    if (type === 'applicants' && row.date_posted) {
+                        const monthName = new Date(row.date_posted).toLocaleDateString('en-US', { month: 'short' });
+                        return monthName === filterLabel;
                     }
                     // For events, filter by date_posted month
                     if (type === 'events' && row.date_posted) {

@@ -231,8 +231,8 @@ foreach ($eventsData as $event) {
     ];
 }
 
-// Fetch departments for dropdown
-$departments = fetchAll($conn, "SELECT * FROM department ORDER BY department_name");
+// Fetch departments for dropdown - deduplicated by name
+$departments = fetchAll($conn, "SELECT MIN(department_id) as department_id, department_name FROM department GROUP BY department_name ORDER BY department_name");
 ?>
 <!DOCTYPE html>
 <html lang="en">

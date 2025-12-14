@@ -790,11 +790,15 @@ try {
                         <button type="button" onclick="clearFilters()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center">
                             <i class="fas fa-times mr-2"></i>Clear
                         </button>
-                        <button type="button" onclick="exportAttendance()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-200">
-                            <i class="fas fa-download mr-2"></i>Export
-                        </button>
                     </div>
                 </form>
+                
+                <!-- Centered Export Button -->
+                <div class="flex justify-center mt-3">
+                    <button type="button" onclick="exportAttendance()" class="bg-teal-700 hover:bg-teal-800 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all duration-200">
+                        <i class="fas fa-download mr-2"></i>Export Attendance
+                    </button>
+                </div>
 
                 <?php if (!empty($attendance_records) || $hasLeaveRecords): ?>
                     <div class="overflow-x-auto">
@@ -1432,6 +1436,14 @@ try {
                     });
                     
                     html += '</tbody></table></div>';
+                    
+                    // Add print button
+                    html += `<div class="mt-4 flex justify-center">
+                        <button onclick="printAttendanceHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all">
+                            <i class="fas fa-print mr-2"></i>Print History
+                        </button>
+                    </div>`;
+                    
                     content.innerHTML = html;
                 })
                 .catch(err => {
@@ -1445,6 +1457,44 @@ try {
                 modal.classList.remove('active');
                 document.body.style.overflow = '';
             }
+        }
+        
+        function printAttendanceHistory() {
+            const content = document.getElementById('employeeHistoryContent');
+            const title = document.getElementById('employeeHistoryTitle');
+            if (!content) return;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Attendance History - ${title?.textContent || 'Employee'}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #0d9488; font-size: 24px; margin-bottom: 10px; }
+                        .date-range { color: #666; margin-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f3f4f6; font-weight: bold; }
+                        .stats { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+                        .stat-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+                        .stat-present { background: #dcfce7; color: #166534; }
+                        .stat-absent { background: #fee2e2; color: #991b1b; }
+                        .stat-leave { background: #fef3c7; color: #92400e; }
+                        .stat-rest { background: #f3e8ff; color: #6b21a8; }
+                        @media print { body { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <h1>Attendance History - ${title?.textContent || 'Employee'}</h1>
+                    <div class="date-range">Period: ${document.getElementById('historyStartDate')?.value || ''} to ${document.getElementById('historyEndDate')?.value || ''}</div>
+                    ${content.innerHTML.replace(/<button.*?<\/button>/gi, '')}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
         }
     </script>
 
