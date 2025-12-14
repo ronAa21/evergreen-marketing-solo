@@ -286,40 +286,51 @@ CREATE TABLE system_logs (
 -- BANKING MODULE
 -- ========================================
 CREATE TABLE account_applications (
-    application_id INT AUTO_INCREMENT PRIMARY KEY,
-    application_number VARCHAR(50) NOT NULL,
-    application_status ENUM('pending','approved','rejected') DEFAULT 'pending',
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    email VARCHAR(150) NOT NULL,
-    phone_number VARCHAR(20) NOT NULL,
-    date_of_birth DATE NOT NULL,
-    street_address VARCHAR(255) NOT NULL,
-    barangay VARCHAR(150) NOT NULL DEFAULT '',
-    city VARCHAR(100) NOT NULL,
-    state VARCHAR(100) NOT NULL,
-    zip_code VARCHAR(20) NOT NULL,
-    ssn VARCHAR(50) NOT NULL COMMENT 'TIN (Tax Identification Number)',
-    id_type VARCHAR(50) NOT NULL COMMENT 'Philippine Government ID Type',
-    id_number VARCHAR(100) NOT NULL,
-    id_document_path VARCHAR(255) DEFAULT NULL COMMENT 'Path to uploaded ID document',
-    employment_status VARCHAR(50) NOT NULL,
-    employer_name VARCHAR(150) DEFAULT NULL,
-    job_title VARCHAR(100) DEFAULT NULL,
-    annual_income DECIMAL(15,2) DEFAULT NULL,
-    account_type VARCHAR(50) NOT NULL COMMENT 'acct-checking, acct-savings, acct-both',
-    selected_cards TEXT DEFAULT NULL COMMENT 'Comma-separated: debit, credit, prepaid',
-    additional_services TEXT DEFAULT NULL COMMENT 'Comma-separated: debit, online, mobile, overdraft',
-    terms_accepted TINYINT(1) DEFAULT 0,
-    privacy_acknowledged TINYINT(1) DEFAULT 0,
-    marketing_consent TINYINT(1) DEFAULT 0,
-    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at DATETIME DEFAULT NULL,
-    UNIQUE KEY application_number (application_number),
-    INDEX idx_application_number (application_number),
-    INDEX idx_email (email),
-    INDEX idx_status (application_status),
-    INDEX idx_submitted_at (submitted_at)
+  application_id int(11) NOT NULL AUTO_INCREMENT,
+  application_number varchar(50) NOT NULL,
+  application_status enum('pending','approved','rejected') DEFAULT 'pending',
+  customer_id int(11) DEFAULT NULL COMMENT 'Reference to existing customer opening the account',
+  first_name varchar(100) NOT NULL,
+  middle_name varchar(100) DEFAULT NULL,
+  last_name varchar(100) NOT NULL,
+  email varchar(255) DEFAULT NULL,
+  phone_number varchar(20) DEFAULT NULL,
+  date_of_birth date NOT NULL,
+  place_of_birth varchar(150) DEFAULT NULL,
+  gender varchar(20) DEFAULT NULL,
+  civil_status varchar(20) DEFAULT NULL,
+  nationality varchar(50) DEFAULT NULL,
+  street_address varchar(255) DEFAULT NULL,
+  barangay_id int(11) DEFAULT NULL,
+  city_id int(11) DEFAULT NULL,
+  province_id int(11) DEFAULT NULL,
+  postal_code varchar(20) DEFAULT NULL,
+  id_type varchar(50) DEFAULT NULL,
+  id_number varchar(100) DEFAULT NULL,
+  employment_status varchar(50) DEFAULT NULL,
+  employer_name varchar(150) DEFAULT NULL,
+  occupation varchar(100) DEFAULT NULL,
+  annual_income decimal(15,2) DEFAULT NULL,
+  source_of_funds varchar(100) DEFAULT NULL,
+  account_type varchar(50) DEFAULT NULL,
+  terms_accepted tinyint(1) DEFAULT 0,
+  privacy_acknowledged tinyint(1) DEFAULT 0,
+  submitted_at datetime DEFAULT current_timestamp(),
+  reviewed_at datetime DEFAULT NULL,
+  reviewed_by_employee_id int(11) DEFAULT NULL,
+  rejection_reason text DEFAULT NULL,
+  created_by_employee_id int(11) DEFAULT NULL,
+  id_front_image varchar(255) DEFAULT NULL COMMENT 'Path to front image of valid ID',
+  id_back_image varchar(255) DEFAULT NULL COMMENT 'Path to back image of valid ID',
+  id_uploaded_at datetime DEFAULT NULL COMMENT 'Timestamp when ID images were uploaded',
+  PRIMARY KEY (application_id),
+  UNIQUE KEY application_number (application_number),
+  KEY idx_application_number (application_number),
+  KEY idx_email (email),
+  KEY idx_status (application_status),
+  KEY idx_submitted_at (submitted_at),
+  KEY idx_id_uploaded (id_uploaded_at),
+  KEY idx_customer_id (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE missions (
@@ -389,31 +400,35 @@ CREATE TABLE barangays (
 );
 
 CREATE TABLE bank_customers (
-    customer_id INT AUTO_INCREMENT PRIMARY KEY,
-    last_name VARCHAR(50) NOT NULL,
-    first_name VARCHAR(50) NOT NULL,
-    middle_name VARCHAR(50) DEFAULT NULL,
-    address VARCHAR(255) DEFAULT NULL,
-    city_province VARCHAR(100) DEFAULT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    contact_number VARCHAR(20) DEFAULT NULL,
-    birthday DATE DEFAULT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    verification_code VARCHAR(100) DEFAULT NULL,
-    bank_id VARCHAR(50) DEFAULT NULL,
-    referral_code VARCHAR(20) DEFAULT NULL,
-    total_points DECIMAL(10,2) DEFAULT 0.00,
-    referred_by_customer_id INT NULL,
-    is_verified BOOLEAN DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by_employee_id INT DEFAULT NULL,
-    UNIQUE KEY idx_referral_code (referral_code),
-    UNIQUE KEY idx_email (email),
-    INDEX idx_created_by_employee_id (created_by_employee_id),
-    INDEX idx_referred_by (referred_by_customer_id),
-    INDEX idx_bank_id (bank_id),
-    CONSTRAINT fk_referred_by FOREIGN KEY (referred_by_customer_id) REFERENCES bank_customers(customer_id) ON DELETE SET NULL
-);
+  customer_id int(11) NOT NULL AUTO_INCREMENT,
+  email varchar(255) NOT NULL COMMENT 'Used for login',
+  contact_number varchar(20) DEFAULT NULL,
+  birthday date DEFAULT NULL,
+  password_hash varchar(255) DEFAULT NULL COMMENT 'NULL until application approved',
+  verification_code varchar(10) DEFAULT NULL,
+  bank_id int(11) DEFAULT NULL,
+  referral_code varchar(20) DEFAULT NULL,
+  referred_by_customer_id int(11) DEFAULT NULL,
+  total_points int(11) DEFAULT 0,
+  application_id int(11) DEFAULT NULL COMMENT 'Links to account_applications',
+  last_name varchar(100) DEFAULT NULL,
+  first_name varchar(100) DEFAULT NULL,
+  middle_name varchar(100) DEFAULT NULL,
+  address text DEFAULT NULL,
+  city_province varchar(200) DEFAULT NULL,
+  is_verified tinyint(1) DEFAULT 0,
+  is_active tinyint(1) DEFAULT 0 COMMENT 'Active after approval',
+  created_at timestamp NOT NULL DEFAULT current_timestamp(),
+  created_by_employee_id int(11) DEFAULT NULL,
+  last_login datetime DEFAULT NULL,
+  PRIMARY KEY (customer_id),
+  UNIQUE KEY idx_email (email),
+  UNIQUE KEY referral_code (referral_code),
+  KEY idx_application_id (application_id),
+  KEY idx_created_by_employee_id (created_by_employee_id),
+  KEY idx_referred_by (referred_by_customer_id),
+  CONSTRAINT fk_referred_by_customer FOREIGN KEY (referred_by_customer_id) REFERENCES bank_customers (customer_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Complete customer profile with personal info, contact details, and referral system';
 
 CREATE TABLE `points_history` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -463,6 +478,55 @@ CREATE TABLE bank_account_types (
     type_name VARCHAR(50) NOT NULL,
     description VARCHAR(255) DEFAULT NULL
 );
+
+CREATE TABLE account_status_history (
+  status_history_id int(11) NOT NULL AUTO_INCREMENT,
+  account_id int(11) NOT NULL,
+  previous_status enum('active','below_maintaining','flagged_for_removal','closed') DEFAULT NULL,
+  new_status enum('active','below_maintaining','flagged_for_removal','closed') NOT NULL,
+  balance_at_change decimal(10,2) NOT NULL,
+  reason varchar(255) DEFAULT NULL,
+  changed_by int(11) DEFAULT NULL COMMENT 'Employee ID who triggered the change, NULL for system',
+  created_at timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (status_history_id),
+  KEY changed_by (changed_by),
+  KEY idx_account_status (account_id,`created_at`),
+  CONSTRAINT account_status_history_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
+  CONSTRAINT account_status_history_ibfk_2 FOREIGN KEY (changed_by) REFERENCES bank_employees (employee_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE application_documents (
+  document_id int(11) NOT NULL AUTO_INCREMENT,
+  application_id int(11) NOT NULL,
+  document_type varchar(50) NOT NULL COMMENT 'id_front, id_back, proof_of_income, proof_of_address',
+  file_name varchar(255) NOT NULL,
+  file_path varchar(500) NOT NULL,
+  file_size int(11) DEFAULT NULL COMMENT 'File size in bytes',
+  mime_type varchar(100) DEFAULT NULL COMMENT 'image/jpeg, image/png, application/pdf',
+  uploaded_at datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (document_id),
+  KEY idx_application_id (application_id),
+  KEY idx_document_type (document_type),
+  CONSTRAINT application_documents_ibfk_1 FOREIGN KEY (application_id) REFERENCES account_applications (application_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE service_fee_charges (
+  fee_id int(11) NOT NULL AUTO_INCREMENT,
+  account_id int(11) NOT NULL,
+  transaction_id int(11) DEFAULT NULL,
+  fee_amount decimal(10,2) NOT NULL,
+  balance_before decimal(10,2) NOT NULL,
+  balance_after decimal(10,2) NOT NULL,
+  charge_date date NOT NULL,
+  fee_type enum('monthly_service_fee','below_maintaining_fee') DEFAULT 'monthly_service_fee',
+  created_at timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (fee_id),
+  KEY transaction_id (transaction_id),
+  KEY idx_account_date (account_id,`charge_date`),
+  CONSTRAINT service_fee_charges_ibfk_1 FOREIGN KEY (account_id) REFERENCES customer_accounts (account_id),
+  CONSTRAINT service_fee_charges_ibfk_2 FOREIGN KEY (transaction_id) REFERENCES bank_transactions (transaction_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 CREATE TABLE bank_accounts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -680,6 +744,7 @@ CREATE TABLE account_balances (
     FOREIGN KEY (account_id) REFERENCES accounts(id),
     FOREIGN KEY (fiscal_period_id) REFERENCES fiscal_periods(id)
 );
+
 
 CREATE TABLE journal_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
