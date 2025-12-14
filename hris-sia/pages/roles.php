@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $managed_department_id = !empty($_POST['managed_department_id']) ? $_POST['managed_department_id'] : null;
                 
                 // Clear department for non-manager roles
-                if (!in_array($new_role, ['Manager', 'Supervisor'])) {
+                if ($new_role !== 'Supervisor') {
                     $managed_department_id = null;
                 }
                 
@@ -55,10 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $employees = getAllEmployeesWithRoles($conn);
 
 // Fetch departments for dropdown
-$departments = fetchAll($conn, "SELECT department_id, department_name FROM department ORDER BY department_name");
+$departments = fetchAll($conn, "SELECT MIN(department_id) as department_id, department_name FROM department GROUP BY department_name ORDER BY department_name");
 
 // Role options
-$roles = ['Employee', 'Supervisor', 'Manager', 'HR Manager', 'Admin'];
+$roles = ['Employee', 'Supervisor', 'HR Manager', 'Admin'];
 
 // Filter handling
 $filter_role = $_GET['role'] ?? '';
@@ -89,7 +89,6 @@ $filtered_employees = array_filter($employees, function($emp) use ($filter_role,
 $role_counts = [
     'Admin' => 0,
     'HR Manager' => 0,
-    'Manager' => 0,
     'Supervisor' => 0,
     'Employee' => 0
 ];
@@ -287,7 +286,7 @@ foreach ($employees as $emp) {
             <?php endif; ?>
 
             <!-- Role Stats Cards - Dashboard Style -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 mb-6 lg:mb-8">
+            <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
                 <!-- Admin Card -->
                 <a href="?role=Admin" class="stat-card admin-card text-white rounded-xl p-5 lg:p-6 shadow-xl <?php echo $filter_role === 'Admin' ? 'card-active' : ''; ?>">
                     <div class="stat-icon">
@@ -306,16 +305,6 @@ foreach ($employees as $emp) {
                     <h3 class="stat-title">HR Managers</h3>
                     <p class="stat-number"><?php echo $role_counts['HR Manager']; ?></p>
                     <p class="stat-label">Human Resources</p>
-                </a>
-                
-                <!-- Manager Card -->
-                <a href="?role=Manager" class="stat-card manager-card text-white rounded-xl p-5 lg:p-6 shadow-xl <?php echo $filter_role === 'Manager' ? 'card-active' : ''; ?>">
-                    <div class="stat-icon">
-                        <i class="fas fa-user-gear text-2xl"></i>
-                    </div>
-                    <h3 class="stat-title">Managers</h3>
-                    <p class="stat-number"><?php echo $role_counts['Manager']; ?></p>
-                    <p class="stat-label">Department Managers</p>
                 </a>
                 
                 <!-- Supervisor Card -->
@@ -402,14 +391,12 @@ foreach ($employees as $emp) {
                                     $roleClass = match($role) {
                                         'Admin' => 'role-admin',
                                         'HR Manager' => 'role-hr',
-                                        'Manager' => 'role-manager',
                                         'Supervisor' => 'role-supervisor',
                                         default => 'role-employee'
                                     };
                                     $roleIcon = match($role) {
                                         'Admin' => 'fa-crown',
                                         'HR Manager' => 'fa-user-tie',
-                                        'Manager' => 'fa-user-gear',
                                         'Supervisor' => 'fa-user-check',
                                         default => 'fa-user'
                                     };
@@ -441,7 +428,7 @@ foreach ($employees as $emp) {
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-600">
-                                        <?php if (in_array($role, ['Manager', 'Supervisor']) && $emp['managed_department_name']): ?>
+                                        <?php if ($role === 'Supervisor' && $emp['managed_department_name']): ?>
                                             <span class="text-blue-600 font-medium">
                                                 <i class="fas fa-building mr-1"></i>
                                                 <?php echo htmlspecialchars($emp['managed_department_name']); ?>
@@ -518,7 +505,7 @@ foreach ($employees as $emp) {
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="text-xs text-gray-500 mt-1">Required for Manager and Supervisor roles</p>
+                    <p class="text-xs text-gray-500 mt-1">Required for Supervisor role</p>
                 </div>
                 
                 <div class="flex gap-3">
@@ -572,7 +559,7 @@ foreach ($employees as $emp) {
             const container = document.getElementById('department_select_container');
             const select = document.getElementById('modal_department');
             
-            if (role === 'Manager' || role === 'Supervisor') {
+            if (role === 'Supervisor') {
                 container.style.display = 'block';
                 select.required = true;
             } else {

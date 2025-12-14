@@ -1,19 +1,18 @@
 -- ========================================
--- HRIS-SIA ROLE MANAGEMENT MIGRATION
+-- HRIS-SIA DATABASE MIGRATION
 -- ========================================
--- This migration adds support for Manager and Supervisor roles
--- with department-based permissions for leave approvals
--- 
 -- Run this script on your BankingDB database
+-- Last Updated: December 14, 2025
 -- ========================================
 
+-- ========================================
+-- ROLE MANAGEMENT CHANGES
+-- ========================================
 -- Add managed_department_id column to user_account table
--- This allows Managers/Supervisors to be assigned to a specific department
 ALTER TABLE user_account 
 ADD COLUMN IF NOT EXISTS managed_department_id INT DEFAULT NULL AFTER role;
 
 -- Add foreign key constraint for department reference
--- Only add if constraint doesn't already exist
 SET @constraint_exists = (
     SELECT COUNT(*) 
     FROM information_schema.TABLE_CONSTRAINTS 
@@ -31,51 +30,36 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Update role column to support new role values
--- Current: 'Admin', 'HR Manager'
--- New: 'Admin', 'HR Manager', 'Manager', 'Supervisor', 'Employee'
--- The VARCHAR(20) should accommodate all these values
+-- ========================================
+-- REMOVE MANAGER ROLE - TRANSFER TO SUPERVISOR
+-- ========================================
+UPDATE user_account SET role = 'Supervisor' WHERE role = 'Manager';
 
--- Create sample Manager and Supervisor accounts (optional)
--- Uncomment if you want to create test accounts
+-- Set managed_department_id for ALL existing Supervisors based on their employee's department
+-- This ensures supervisors created before this migration also get department filtering
+UPDATE user_account ua
+JOIN employee e ON ua.employee_id = e.employee_id
+SET ua.managed_department_id = e.department_id
+WHERE ua.role = 'Supervisor' 
+AND (ua.managed_department_id IS NULL OR ua.managed_department_id = 0);
 
--- INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id, last_login)
--- VALUES (
---     2, -- Link to an existing employee ID
---     'manager1',
---     '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- password: 'password'
---     'Manager',
---     1, -- Department ID 1 (e.g., HR Department)
---     NULL
--- )
--- ON DUPLICATE KEY UPDATE 
---     role = VALUES(role),
---     managed_department_id = VALUES(managed_department_id);
+SELECT 'Manager role migrated to Supervisor and department IDs set!' as status;
 
 -- ========================================
--- NOTES
+-- CLEANUP DUPLICATE ACCOUNTS
 -- ========================================
--- Role Hierarchy:
---   1. Admin - Full system access, can approve all leaves, manage all employees
---   2. HR Manager - Can approve all leaves, view all employees, limited edit
---   3. Manager - Can approve leaves for their department only
---   4. Supervisor - View-only access for their department
---   5. Employee - Self-service access via employee_dashboard.php
---
--- To assign a Manager to a department:
---   UPDATE user_account SET role = 'Manager', managed_department_id = <dept_id> WHERE user_id = <user_id>;
---
--- To assign a Supervisor to a department:
---   UPDATE user_account SET role = 'Supervisor', managed_department_id = <dept_id> WHERE user_id = <user_id>;
--- ========================================
+-- Remove old manager/supervisor test accounts to prevent duplicates
+DELETE FROM user_account WHERE username = 'manager';
+DELETE FROM user_account WHERE username = 'supervisor';
 
-SELECT 'Migration completed successfully!' as status;
+-- Remove any supervisor_* accounts that might have been created previously
+DELETE FROM user_account WHERE username LIKE 'supervisor_%';
+
+SELECT 'Cleaned up duplicate accounts!' as status;
 
 -- ========================================
 -- ROLE CHANGE AUDIT LOG TABLE
 -- ========================================
--- Tracks all role assignments and changes for audit/compliance
-
 CREATE TABLE IF NOT EXISTS role_change_log (
     log_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -93,48 +77,152 @@ CREATE TABLE IF NOT EXISTS role_change_log (
     FOREIGN KEY (new_department_id) REFERENCES department(department_id) ON DELETE SET NULL
 );
 
-SELECT 'Role change audit log table created!' as status;
+-- ========================================
+-- ADD LOAN OFFICER POSITION
+-- ========================================
+INSERT INTO `position` (position_id, position_title, job_description, salary_grade) 
+VALUES (25, 'Loan Officer', 'Loan Officer - Reviews and approves loan applications', 8)
+ON DUPLICATE KEY UPDATE position_title = 'Loan Officer';
+
+SELECT 'Loan Officer position added!' as status;
 
 -- ========================================
--- SAMPLE MANAGER ACCOUNT
+-- CLEANUP AND ENSURE ALL DEPARTMENTS EXIST
 -- ========================================
--- Username: manager
--- Password: password
--- Role: Manager (can approve leaves for IT Department)
+-- Disable foreign key checks to allow duplicate removal
+SET FOREIGN_KEY_CHECKS = 0;
 
+-- Remove duplicate departments (keep lowest ID)
+DELETE d1 FROM department d1
+INNER JOIN department d2 
+WHERE d1.department_id > d2.department_id 
+AND d1.department_name = d2.department_name;
+
+-- Re-enable foreign key checks
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- Now insert departments (will skip if exists due to ON DUPLICATE KEY)
+INSERT INTO department (department_name) VALUES 
+    ('Customer Service'),
+    ('Finance'),
+    ('Human Resources'),
+    ('IT'),
+    ('Marketing'),
+    ('Operations'),
+    ('Sales')
+ON DUPLICATE KEY UPDATE department_name = VALUES(department_name);
+
+SELECT 'Departments cleaned and verified!' as status;
+
+-- ========================================
+-- CREATE SUPERVISORS FOR EACH DEPARTMENT
+-- ========================================
+-- Each supervisor is linked to a UNIQUE employee from that department
+-- Password for all supervisors: 'password'
+
+-- Supervisor for Customer Service - employee from CS department
 INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
-VALUES (
-    2,                                                                    -- Link to employee ID 2
-    'manager',                                                            -- Username
-    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',     -- Password: 'password'
-    'Manager',                                                            -- Role
-    1                                                                      -- Department ID 1 (HR/IT)
-)
-ON DUPLICATE KEY UPDATE role = 'Manager', managed_department_id = 1;
+SELECT 
+    e.employee_id,
+    'supervisor_cs',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Customer Service'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
 
-
--- ========================================
--- SAMPLE SUPERVISOR ACCOUNT
--- ========================================
--- Username: supervisor
--- Password: password
--- Role: Supervisor (view-only access for Finance Department)
-
+-- Supervisor for Finance - employee from Finance department  
 INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
-VALUES (
-    3,                                                                    -- Link to employee ID 3
-    'supervisor',                                                         -- Username
-    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',     -- Password: 'password'
-    'Supervisor',                                                         -- Role
-    2                                                                      -- Department ID 2 (Finance)
-)
-ON DUPLICATE KEY UPDATE role = 'Supervisor', managed_department_id = 2;
+SELECT 
+    e.employee_id,
+    'supervisor_finance',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Finance'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Human Resources - employee from HR department
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id,
+    'supervisor_hr',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Human Resources'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for IT - employee from IT department
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id,
+    'supervisor_it',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'IT'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Marketing - employee from Marketing department
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id,
+    'supervisor_marketing',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Marketing'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Operations - employee from Operations department
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id,
+    'supervisor_operations',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Operations'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+-- Supervisor for Sales - employee from Sales department
+INSERT INTO user_account (employee_id, username, password_hash, role, managed_department_id)
+SELECT 
+    e.employee_id,
+    'supervisor_sales',
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'Supervisor',
+    d.department_id
+FROM employee e
+JOIN department d ON d.department_name = 'Sales'
+WHERE e.department_id = d.department_id AND e.employment_status = 'Active'
+AND NOT EXISTS (SELECT 1 FROM user_account ua WHERE ua.employee_id = e.employee_id)
+LIMIT 1;
+
+SELECT 'Department supervisors created!' as status;
 
 -- ========================================
 -- EVENT PARTICIPANTS TABLE
 -- ========================================
--- Tracks employees invited to recruitment events with RSVP status
-
 CREATE TABLE IF NOT EXISTS event_participants (
     id INT AUTO_INCREMENT PRIMARY KEY,
     event_id INT NOT NULL,
@@ -155,3 +243,54 @@ CREATE TABLE IF NOT EXISTS event_participants (
 );
 
 SELECT 'Event participants table created!' as status;
+
+-- ========================================
+-- ROLE HIERARCHY & PERMISSIONS (Updated)
+-- ========================================
+-- 
+-- 1. Admin - Full system access
+--    - Can approve all leaves
+--    - Can manage all employees
+--    - Can assign user roles
+--    - Can view all departments
+--
+-- 2. HR Manager - HR administrative access
+--    - Can approve all leaves
+--    - Can view all employees
+--    - Can manage recruitment
+--    - Cannot assign roles
+--
+-- 3. Supervisor - Department-specific access
+--    - Can ONLY see data from their assigned department
+--    - Can approve leaves for their department ONLY
+--    - Has VIEW-ONLY access to employee data (cannot edit)
+--    - managed_department_id determines scope
+--    - Department filtering applied to:
+--      * Dashboard statistics
+--      * Employee lists
+--      * Attendance records
+--      * Leave requests
+--      * Events/Recruitment
+--      * Applicants
+--
+-- 4. Employee - Self-service access only
+--    - Via employee_dashboard.php
+--    - Can view own attendance
+--    - Can submit leave requests
+--    - Can respond to event invitations
+--
+-- NOTE: Manager role has been REMOVED and merged into Supervisor
+-- ========================================
+
+-- ========================================
+-- PERMISSION FUNCTIONS IN auth.php
+-- ========================================
+-- isSupervisor() - Check if user is supervisor
+-- getUserDepartmentId($conn) - Get supervisor's department
+-- canViewEmployeeData() - Supervisors can VIEW (not edit)
+-- canEditEmployeeData() - Only Admin/HR can edit
+-- supervisorViewOnly() - Returns true for view-only supervisors
+-- canApproveLeavesForEmployee($conn, $emp_id) - Department check
+-- ========================================
+
+SELECT '=== MIGRATION COMPLETE ===' as status;

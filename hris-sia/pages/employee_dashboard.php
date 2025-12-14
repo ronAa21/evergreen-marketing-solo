@@ -192,20 +192,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_rsvp'])) {
     }
 }
 
-// Get event invites for this employee
+// Get event invites for this employee (invited events OR department events)
 $eventInvites = [];
 try {
+    // Get employee's department first
+    $empDeptResult = fetchOne($conn, "SELECT department_id FROM employee WHERE employee_id = ?", [$employee_id]);
+    $empDeptId = $empDeptResult['department_id'] ?? null;
+    
+    // Query: Events employee is invited to (with RSVP status)
+    // UNION: Department events (not explicitly invited - shown as 'Department Event')
     $eventInvites = fetchAll($conn,
         "SELECT ep.id as participant_id, ep.rsvp_status, ep.rsvp_date,
                 r.recruitment_id, r.job_title as event_name, r.date_posted as event_date,
-                d.department_name
+                d.department_name, 'invited' as source
          FROM event_participants ep
          JOIN recruitment r ON ep.event_id = r.recruitment_id
          LEFT JOIN department d ON r.department_id = d.department_id
          WHERE ep.employee_id = ?
-         ORDER BY r.date_posted DESC
-         LIMIT 10",
-        [$employee_id]
+         
+         UNION
+         
+         SELECT NULL as participant_id, 'Department' as rsvp_status, NULL as rsvp_date,
+                r.recruitment_id, r.job_title as event_name, r.date_posted as event_date,
+                d.department_name, 'department' as source
+         FROM recruitment r
+         LEFT JOIN department d ON r.department_id = d.department_id
+         WHERE r.department_id = ?
+         AND r.status = 'Open'
+         AND r.recruitment_id NOT IN (
+             SELECT event_id FROM event_participants WHERE employee_id = ?
+         )
+         
+         ORDER BY event_date DESC
+         LIMIT 15",
+        [$employee_id, $empDeptId, $employee_id]
     ) ?: [];
 } catch (Exception $e) {
     $eventInvites = [];
@@ -526,10 +546,11 @@ try {
                                                     'Accepted' => 'bg-green-100 text-green-800',
                                                     'Declined' => 'bg-red-100 text-red-800',
                                                     'Maybe' => 'bg-blue-100 text-blue-800',
+                                                    'Department' => 'bg-purple-100 text-purple-800',
                                                     default => 'bg-yellow-100 text-yellow-800'
                                                 };
                                             ?>">
-                                                <?php echo htmlspecialchars($invite['rsvp_status']); ?>
+                                                <?php echo $invite['rsvp_status'] === 'Department' ? 'Dept Event' : htmlspecialchars($invite['rsvp_status']); ?>
                                             </span>
                                         </div>
                                         <p class="text-xs text-gray-600 mb-2">
@@ -539,7 +560,7 @@ try {
                                                 <i class="fas fa-building mr-1"></i><?php echo htmlspecialchars($invite['department_name']); ?>
                                             <?php endif; ?>
                                         </p>
-                                        <?php if ($invite['rsvp_status'] === 'Pending'): ?>
+                                        <?php if ($invite['participant_id'] && $invite['rsvp_status'] === 'Pending'): ?>
                                             <form method="POST" class="flex gap-2 mt-2">
                                                 <input type="hidden" name="update_rsvp" value="1">
                                                 <input type="hidden" name="participant_id" value="<?php echo $invite['participant_id']; ?>">

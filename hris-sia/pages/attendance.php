@@ -165,11 +165,20 @@ function isDateWeekend($date) {
 $isRestDay = isDateWeekend($date_filter);
 $dayName = date('l', strtotime($date_filter)); // Get day name (Saturday, Sunday, etc.)
 
-// Department-scoped filtering for Managers
+// Department-scoped filtering for Supervisors
 $managerDeptFilter = "";
 $managerDeptId = null;
-if (isManager() && !isAdmin() && !isHRManager()) {
+$debugInfo = "";
+if (isSupervisor() && !isAdmin() && !isHRManager()) {
     $managerDeptId = getUserDepartmentId($conn);
+    // Get department name for debug
+    if ($managerDeptId) {
+        $deptResult = fetchOne($conn, "SELECT department_name FROM department WHERE department_id = ?", [$managerDeptId]);
+        $deptName = $deptResult['department_name'] ?? 'Unknown';
+        $debugInfo = "Filtering: {$deptName} (ID: {$managerDeptId})";
+    } else {
+        $debugInfo = "WARNING: No department assigned! Please run migration.";
+    }
 }
 
 // Query to get attendance records
@@ -621,7 +630,23 @@ try {
                     Date Filter: <strong><?php echo htmlspecialchars($date_filter); ?></strong><br>
                     Total Records: <?php echo count($attendance_records); ?><br>
                     Leave Count: <strong><?php echo $leave; ?></strong><br>
-                    Employees on Leave IDs: <?php echo empty($employeesOnLeave) ? 'NONE' : implode(', ', $employeesOnLeave); ?>
+                    Employees on Leave IDs: <?php echo empty($employeesOnLeave) ? 'NONE' : implode(', ', $employeesOnLeave); ?><br>
+                    <hr class="my-2 border-blue-300">
+                    <strong>👤 SUPERVISOR INFO:</strong><br>
+                    User Role: <strong><?php echo htmlspecialchars($_SESSION['user_role'] ?? 'unknown'); ?></strong><br>
+                    isSupervisor(): <strong><?php echo isSupervisor() ? 'TRUE' : 'FALSE'; ?></strong><br>
+                    isAdmin(): <strong><?php echo isAdmin() ? 'TRUE' : 'FALSE'; ?></strong><br>
+                    isHRManager(): <strong><?php echo isHRManager() ? 'TRUE' : 'FALSE'; ?></strong><br>
+                    Manager Dept ID: <strong><?php echo $managerDeptId ?? 'NULL'; ?></strong><br>
+                    Debug Info: <strong><?php echo $debugInfo ?: 'N/A'; ?></strong>
+                </div>
+            <?php endif; ?>
+            
+            <?php // Always show department filter banner for supervisors ?>
+            <?php if ($debugInfo): ?>
+                <div class="mb-4 p-3 rounded-lg <?php echo $managerDeptId ? 'bg-teal-100 text-teal-800' : 'bg-red-100 text-red-800'; ?>">
+                    <i class="fas <?php echo $managerDeptId ? 'fa-building' : 'fa-exclamation-triangle'; ?> mr-2"></i>
+                    <strong><?php echo htmlspecialchars($debugInfo); ?></strong>
                 </div>
             <?php endif; ?>
             
@@ -711,11 +736,18 @@ try {
                             <select id="employeeSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
                                 <option value="">Choose an employee...</option>
                                 <?php
-                                $empList = fetchAll($conn, "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as full_name, d.department_name 
-                                                           FROM employee e 
-                                                           LEFT JOIN department d ON e.department_id = d.department_id 
-                                                           WHERE e.employment_status = 'Active' 
-                                                           ORDER BY e.first_name, e.last_name");
+                                // Filter employees by supervisor's department
+                                $empQuery = "SELECT e.employee_id, CONCAT(e.first_name, ' ', e.last_name) as full_name, d.department_name 
+                                             FROM employee e 
+                                             LEFT JOIN department d ON e.department_id = d.department_id 
+                                             WHERE e.employment_status = 'Active'";
+                                $empParams = [];
+                                if ($managerDeptId) {
+                                    $empQuery .= " AND e.department_id = ?";
+                                    $empParams[] = $managerDeptId;
+                                }
+                                $empQuery .= " ORDER BY e.first_name, e.last_name";
+                                $empList = fetchAll($conn, $empQuery, $empParams);
                                 foreach ($empList as $emp): ?>
                                     <option value="<?php echo $emp['employee_id']; ?>">
                                         EMP-<?php echo str_pad($emp['employee_id'], 4, '0', STR_PAD_LEFT); ?> - <?php echo htmlspecialchars($emp['full_name']); ?> (<?php echo htmlspecialchars($emp['department_name'] ?? 'No Dept'); ?>)
@@ -758,11 +790,15 @@ try {
                         <button type="button" onclick="clearFilters()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center">
                             <i class="fas fa-times mr-2"></i>Clear
                         </button>
-                        <button type="button" onclick="exportAttendance()" class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-200">
-                            <i class="fas fa-download mr-2"></i>Export
-                        </button>
                     </div>
                 </form>
+                
+                <!-- Centered Export Button -->
+                <div class="flex justify-center mt-3">
+                    <button type="button" onclick="exportAttendance()" class="bg-teal-700 hover:bg-teal-800 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all duration-200">
+                        <i class="fas fa-download mr-2"></i>Export Attendance
+                    </button>
+                </div>
 
                 <?php if (!empty($attendance_records) || $hasLeaveRecords): ?>
                     <div class="overflow-x-auto">
@@ -1400,6 +1436,14 @@ try {
                     });
                     
                     html += '</tbody></table></div>';
+                    
+                    // Add print button
+                    html += `<div class="mt-4 flex justify-center">
+                        <button onclick="printAttendanceHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all">
+                            <i class="fas fa-print mr-2"></i>Print History
+                        </button>
+                    </div>`;
+                    
                     content.innerHTML = html;
                 })
                 .catch(err => {
@@ -1413,6 +1457,44 @@ try {
                 modal.classList.remove('active');
                 document.body.style.overflow = '';
             }
+        }
+        
+        function printAttendanceHistory() {
+            const content = document.getElementById('employeeHistoryContent');
+            const title = document.getElementById('employeeHistoryTitle');
+            if (!content) return;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Attendance History - ${title?.textContent || 'Employee'}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #0d9488; font-size: 24px; margin-bottom: 10px; }
+                        .date-range { color: #666; margin-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f3f4f6; font-weight: bold; }
+                        .stats { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+                        .stat-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+                        .stat-present { background: #dcfce7; color: #166534; }
+                        .stat-absent { background: #fee2e2; color: #991b1b; }
+                        .stat-leave { background: #fef3c7; color: #92400e; }
+                        .stat-rest { background: #f3e8ff; color: #6b21a8; }
+                        @media print { body { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <h1>Attendance History - ${title?.textContent || 'Employee'}</h1>
+                    <div class="date-range">Period: ${document.getElementById('historyStartDate')?.value || ''} to ${document.getElementById('historyEndDate')?.value || ''}</div>
+                    ${content.innerHTML.replace(/<button.*?<\/button>/gi, '')}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
         }
     </script>
 

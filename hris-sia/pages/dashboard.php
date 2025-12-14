@@ -7,9 +7,25 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['logged_in']) || $_SESSION[
 }
 
 require_once '../config/database.php';
+require_once '../includes/auth.php';
 
 if (isset($logger)) {
     $logger->debug('PAGE', 'Dashboard accessed', 'User: ' . ($_SESSION['username'] ?? 'unknown'));
+}
+
+// ========================================
+// SUPERVISOR DEPARTMENT FILTERING
+// ========================================
+// Supervisors only see data from their assigned department
+$supervisorDeptId = null;
+$supervisorDeptFilter = "";
+$supervisorDeptFilterWithAnd = "";
+if (isSupervisor() && !isAdmin() && !isHRManager()) {
+    $supervisorDeptId = getUserDepartmentId($conn);
+    if ($supervisorDeptId) {
+        $supervisorDeptFilter = " e.department_id = " . intval($supervisorDeptId);
+        $supervisorDeptFilterWithAnd = " AND e.department_id = " . intval($supervisorDeptId);
+    }
 }
 
 function getCount($conn, $table, $whereClause = '') {
@@ -97,11 +113,35 @@ function processYearlyData($data, $years) {
     return $counts;
 }
 
-// Get total employees count (only ACTIVE employees)
+// Get total employees count (only ACTIVE employees) - filtered by department for supervisors
+$employeeWhereClause = "employment_status = 'Active'";
+if ($supervisorDeptId) {
+    $employeeWhereClause .= " AND department_id = " . intval($supervisorDeptId);
+}
+
+// For applicants, we need to filter by recruitment's department
+$applicantCount = 0;
+if ($supervisorDeptId) {
+    $applicantResult = fetchOne($conn, 
+        "SELECT COUNT(*) as total FROM applicant a 
+         LEFT JOIN recruitment r ON a.recruitment_id = r.recruitment_id 
+         WHERE a.application_status != 'Archived' AND r.department_id = ?", 
+        [$supervisorDeptId]);
+    $applicantCount = $applicantResult['total'] ?? 0;
+} else {
+    $applicantCount = getCount($conn, 'applicant', "application_status != 'Archived'");
+}
+
+// For events, filter by department for supervisors
+$eventWhereClause = "MONTH(date_posted) = MONTH(CURDATE()) AND YEAR(date_posted) = YEAR(CURDATE())";
+if ($supervisorDeptId) {
+    $eventWhereClause .= " AND department_id = " . intval($supervisorDeptId);
+}
+
 $stats = [
-    'employees' => getCount($conn, 'employee', "employment_status = 'Active'"),
-    'applicants' => getCount($conn, 'applicant', "application_status != 'Archived'"),
-    'events' => getCount($conn, 'recruitment', "MONTH(date_posted) = MONTH(CURDATE()) AND YEAR(date_posted) = YEAR(CURDATE())")
+    'employees' => getCount($conn, 'employee', $employeeWhereClause),
+    'applicants' => $applicantCount,
+    'events' => getCount($conn, 'recruitment', $eventWhereClause)
 ];
 
 $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -111,22 +151,59 @@ $currentYear = (int)date('Y');
 $years = range($currentYear - 9, $currentYear);
 $yearsLabels = array_map('strval', $years);
 
-// Get yearly data for employees (only ACTIVE employees)
-$employeeYearlyData = getYearlyData($conn, 'employee', 'hire_date', 10, "employment_status = 'Active'");
+// Get yearly data for employees (only ACTIVE employees) - filtered for supervisors
+$employeeWhereBase = "employment_status = 'Active'";
+if ($supervisorDeptId) {
+    $employeeWhereBase .= " AND department_id = " . intval($supervisorDeptId);
+}
+$employeeYearlyData = getYearlyData($conn, 'employee', 'hire_date', 10, $employeeWhereBase);
 $employeeYearlyCounts = processYearlyData($employeeYearlyData, $years);
 
-// Get monthly data for other charts
+// Get monthly data for other charts - filtered for supervisors
+if ($supervisorDeptId) {
+    // For supervisors, get filtered applicant data
+    $applicantMonthlySQL = "SELECT DATE_FORMAT(r.date_posted, '%b') as month, COUNT(*) as count 
+                            FROM applicant a
+                            LEFT JOIN recruitment r ON a.recruitment_id = r.recruitment_id
+                            WHERE a.application_status != 'Archived'
+                            AND r.date_posted IS NOT NULL
+                            AND YEAR(r.date_posted) = YEAR(CURDATE())
+                            AND r.department_id = ?
+                            GROUP BY MONTH(r.date_posted)
+                            ORDER BY MONTH(r.date_posted)";
+    $applicantResult = fetchAll($conn, $applicantMonthlySQL, [$supervisorDeptId]);
+    $applicantMonthlyData = $applicantResult ?: [];
+    
+    // Filtered events data
+    $eventsMonthlySQL = "SELECT DATE_FORMAT(date_posted, '%b') as month, COUNT(*) as count 
+                         FROM recruitment
+                         WHERE date_posted IS NOT NULL
+                         AND YEAR(date_posted) = YEAR(CURDATE())
+                         AND department_id = ?
+                         GROUP BY MONTH(date_posted)
+                         ORDER BY MONTH(date_posted)";
+    $eventsResult = fetchAll($conn, $eventsMonthlySQL, [$supervisorDeptId]);
+    $eventsMonthlyData = $eventsResult ?: [];
+} else {
+    $applicantMonthlyData = getMonthlyData($conn, 'applicant', 'created_at');
+    $eventsMonthlyData = getMonthlyData($conn, 'recruitment', 'date_posted');
+}
+
 $chartData = [
     'employees' => $employeeYearlyCounts,
-    'applicants' => processMonthlyData(getMonthlyData($conn, 'applicant', 'created_at'), $months),
-    'events' => processMonthlyData(getMonthlyData($conn, 'recruitment', 'date_posted'), $months)
+    'applicants' => processMonthlyData($applicantMonthlyData, $months),
+    'events' => processMonthlyData($eventsMonthlyData, $months)
 ];
 
 // ========================================
 // DETAILED DATA FOR MODALS
 // ========================================
 
-// Get detailed employee list for modal
+// Build department filter SQL for supervisor
+$deptFilterSQL = $supervisorDeptId ? " AND e.department_id = " . intval($supervisorDeptId) : "";
+$deptFilterSQLRecruitment = $supervisorDeptId ? " AND r.department_id = " . intval($supervisorDeptId) : "";
+
+// Get detailed employee list for modal - filtered for supervisors
 $employeesList = fetchAll($conn, 
     "SELECT e.employee_id, 
             CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as formatted_id,
@@ -135,13 +212,13 @@ $employeesList = fetchAll($conn,
      FROM employee e
      LEFT JOIN department d ON e.department_id = d.department_id
      LEFT JOIN position p ON e.position_id = p.position_id
-     WHERE e.employment_status = 'Active'
+     WHERE e.employment_status = 'Active'" . $deptFilterSQL . "
      ORDER BY e.hire_date DESC
      LIMIT 50"
 );
 $employeesList = $employeesList ?: [];
 
-// Get detailed applicant list for modal
+// Get detailed applicant list for modal - filtered for supervisors
 $applicantsList = fetchAll($conn,
     "SELECT a.applicant_id, a.full_name, a.email, a.contact_number,
             a.application_status, r.job_title, r.date_posted,
@@ -149,37 +226,57 @@ $applicantsList = fetchAll($conn,
      FROM applicant a
      LEFT JOIN recruitment r ON a.recruitment_id = r.recruitment_id
      LEFT JOIN department d ON r.department_id = d.department_id
-     WHERE a.application_status != 'Archived'
+     WHERE a.application_status != 'Archived'" . $deptFilterSQLRecruitment . "
      ORDER BY r.date_posted DESC
      LIMIT 50"
 );
 $applicantsList = $applicantsList ?: [];
 
-// Get detailed events (recruitment) list for modal
+// Get detailed events (recruitment) list for modal - fetch entire year for chart filtering
 $eventsList = fetchAll($conn,
     "SELECT r.recruitment_id, r.job_title, r.date_posted, r.status,
             d.department_name
      FROM recruitment r
      LEFT JOIN department d ON r.department_id = d.department_id
-     WHERE MONTH(r.date_posted) = MONTH(CURDATE()) 
-     AND YEAR(r.date_posted) = YEAR(CURDATE())
+     WHERE YEAR(r.date_posted) = YEAR(CURDATE())" . $deptFilterSQLRecruitment . "
      ORDER BY r.date_posted DESC
-     LIMIT 50"
+     LIMIT 100"
 );
 $eventsList = $eventsList ?: [];
 
-// Get today's attendance statistics for additional card
-$todayAttendance = fetchOne($conn,
-    "SELECT 
-        (SELECT COUNT(*) FROM attendance WHERE DATE(time_in) = CURDATE()) as present_today,
-        (SELECT COUNT(*) FROM employee WHERE employment_status = 'Active') as total_employees"
-);
+// Get today's attendance statistics for additional card - filtered for supervisors
+if ($supervisorDeptId) {
+    $todayAttendance = fetchOne($conn,
+        "SELECT 
+            (SELECT COUNT(*) FROM attendance a 
+             INNER JOIN employee e ON a.employee_id = e.employee_id 
+             WHERE DATE(a.time_in) = CURDATE() AND e.department_id = ?) as present_today,
+            (SELECT COUNT(*) FROM employee WHERE employment_status = 'Active' AND department_id = ?) as total_employees",
+        [$supervisorDeptId, $supervisorDeptId]
+    );
+} else {
+    $todayAttendance = fetchOne($conn,
+        "SELECT 
+            (SELECT COUNT(*) FROM attendance WHERE DATE(time_in) = CURDATE()) as present_today,
+            (SELECT COUNT(*) FROM employee WHERE employment_status = 'Active') as total_employees"
+    );
+}
 $absentToday = ($todayAttendance['total_employees'] ?? 0) - ($todayAttendance['present_today'] ?? 0);
 
-// Get pending leave requests for additional card
-$pendingLeaves = getCount($conn, 'leave_request', "status = 'Pending'");
+// Get pending leave requests for additional card - filtered for supervisors
+if ($supervisorDeptId) {
+    $pendingLeavesResult = fetchOne($conn,
+        "SELECT COUNT(*) as total FROM leave_request lr 
+         INNER JOIN employee e ON lr.employee_id = e.employee_id 
+         WHERE lr.status = 'Pending' AND e.department_id = ?",
+        [$supervisorDeptId]
+    );
+    $pendingLeaves = $pendingLeavesResult['total'] ?? 0;
+} else {
+    $pendingLeaves = getCount($conn, 'leave_request', "status = 'Pending'");
+}
 
-// Get absent employees today for modal
+// Get absent employees today for modal - filtered for supervisors
 $absentEmployeesList = fetchAll($conn,
     "SELECT e.employee_id,
             CONCAT('EMP-', LPAD(e.employee_id, 4, '0')) as formatted_id,
@@ -187,7 +284,7 @@ $absentEmployeesList = fetchAll($conn,
             d.department_name, e.contact_number, e.email
      FROM employee e
      LEFT JOIN department d ON e.department_id = d.department_id
-     WHERE e.employment_status = 'Active'
+     WHERE e.employment_status = 'Active'" . $deptFilterSQL . "
      AND e.employee_id NOT IN (
          SELECT a.employee_id FROM attendance a WHERE DATE(a.time_in) = CURDATE()
      )
@@ -201,7 +298,7 @@ $absentEmployeesList = fetchAll($conn,
 );
 $absentEmployeesList = $absentEmployeesList ?: [];
 
-// Get pending leave requests for modal
+// Get pending leave requests for modal - filtered for supervisors
 $pendingLeavesList = fetchAll($conn,
     "SELECT lr.leave_request_id, 
             CONCAT(e.first_name, ' ', e.last_name) as employee_name,
@@ -211,7 +308,7 @@ $pendingLeavesList = fetchAll($conn,
      FROM leave_request lr
      LEFT JOIN employee e ON lr.employee_id = e.employee_id
      LEFT JOIN leave_type lt ON lr.leave_type_id = lt.leave_type_id
-     WHERE lr.status = 'Pending'
+     WHERE lr.status = 'Pending'" . $deptFilterSQL . "
      ORDER BY lr.date_requested DESC
      LIMIT 50"
 );
@@ -796,10 +893,10 @@ $stats['pending_leaves'] = $pendingLeaves;
                         const year = new Date(row.hire_date).getFullYear().toString();
                         return year === filterLabel;
                     }
-                    // For applicants, filter by created_at or application date (if available)
-                    if (type === 'applicants' && row.created_at) {
-                        const monthYear = new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                        return monthYear.includes(filterLabel);
+                    // For applicants, filter by date_posted (recruitment posting date)
+                    if (type === 'applicants' && row.date_posted) {
+                        const monthName = new Date(row.date_posted).toLocaleDateString('en-US', { month: 'short' });
+                        return monthName === filterLabel;
                     }
                     // For events, filter by date_posted month
                     if (type === 'events' && row.date_posted) {
