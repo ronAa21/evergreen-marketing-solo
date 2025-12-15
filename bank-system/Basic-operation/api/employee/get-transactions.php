@@ -36,8 +36,9 @@ try {
         exit();
     }
 
-    // Build base query, using unified_schema table names:
-    // bank_transactions (bt), customer_accounts (ca), bank_customers (bc), account_applications (aa), bank_employees (be), transaction_types (tt)
+    // Build base query using unified_schema table names:
+    // bank_transactions (bt), customer_accounts (ca), bank_customers (bc), bank_employees (be), transaction_types (tt)
+    // Use LEFT JOINs for optional relationships to ensure all transactions are fetched
     $query = "
         SELECT 
             bt.transaction_id,
@@ -45,17 +46,28 @@ try {
             bt.created_at,
             bt.amount,
             bt.description,
+            bt.related_account_id,
             ca.account_number,
-            CONCAT(aa.first_name, ' ', 
-                CASE WHEN aa.middle_name IS NOT NULL THEN CONCAT(aa.middle_name, ' ') ELSE '' END,
-                aa.last_name) as customer_name,
+            COALESCE(
+                CONCAT(
+                    COALESCE(bc.first_name, ''), 
+                    CASE WHEN bc.middle_name IS NOT NULL AND bc.middle_name != '' THEN CONCAT(' ', bc.middle_name) ELSE '' END,
+                    CASE WHEN bc.last_name IS NOT NULL AND bc.last_name != '' THEN CONCAT(' ', bc.last_name) ELSE '' END
+                ),
+                CONCAT(
+                    COALESCE(aa.first_name, ''), 
+                    CASE WHEN aa.middle_name IS NOT NULL AND aa.middle_name != '' THEN CONCAT(' ', aa.middle_name) ELSE '' END,
+                    CASE WHEN aa.last_name IS NOT NULL AND aa.last_name != '' THEN CONCAT(' ', aa.last_name) ELSE '' END
+                ),
+                'Unknown Customer'
+            ) as customer_name,
             tt.type_name as transaction_type,
             be.employee_name
         FROM bank_transactions bt
-        INNER JOIN customer_accounts ca ON bt.account_id = ca.account_id
-        INNER JOIN bank_customers bc ON ca.customer_id = bc.customer_id
-        INNER JOIN account_applications aa ON bc.application_id = aa.application_id
         INNER JOIN transaction_types tt ON bt.transaction_type_id = tt.transaction_type_id
+        LEFT JOIN customer_accounts ca ON bt.account_id = ca.account_id
+        LEFT JOIN bank_customers bc ON ca.customer_id = bc.customer_id
+        LEFT JOIN account_applications aa ON bc.application_id = aa.application_id
         LEFT JOIN bank_employees be ON bt.employee_id = be.employee_id
         WHERE 1=1
     ";
@@ -130,14 +142,18 @@ try {
     $formattedTransactions = [];
     foreach ($transactions as $transaction) {
         // Use the transaction_ref field from the database, if available
-        $reference = $transaction['transaction_ref'] ?? 'N/A';
+        $reference = $transaction['transaction_ref'] ?? '';
         
-        // If transaction_ref is not explicitly selected/available, fallback to parsing description
-        if ($reference === 'N/A') {
-             $description = $transaction['description'];
-             $referenceMatch = [];
-             preg_match('/Ref:\s*([A-Z0-9]+)/', $description, $referenceMatch);
-             $reference = $referenceMatch[1] ?? 'N/A';
+        // If transaction_ref is empty, generate one from transaction_id or parse from description
+        if (empty($reference)) {
+            $description = $transaction['description'] ?? '';
+            $referenceMatch = [];
+            if (preg_match('/Ref:\s*([A-Z0-9]+)/', $description, $referenceMatch)) {
+                $reference = $referenceMatch[1];
+            } else {
+                // Generate reference from transaction_id
+                $reference = 'TXN-' . str_pad($transaction['transaction_id'], 8, '0', STR_PAD_LEFT);
+            }
         }
 
         // Format date - better readable format
@@ -145,28 +161,31 @@ try {
         $formattedDate = $date->format('M d, Y h:i A'); // e.g., "Jan 15, 2024 02:30 PM"
 
         // Determine method based on description or type
+        $transactionType = $transaction['transaction_type'] ?? 'Unknown';
+        $description = $transaction['description'] ?? '';
+        
         $method = 'Cash'; // Default
-        if (strpos($transaction['transaction_type'], 'Transfer') !== false) {
-             $method = 'Electronic';
-        } elseif (strpos($transaction['transaction_type'], 'Loan') !== false || 
-                  strpos($transaction['transaction_type'], 'Interest') !== false || 
-                  strpos($transaction['transaction_type'], 'Charge') !== false) {
-             $method = 'System';
-        } elseif (strpos($transaction['description'], 'Teller') !== false) {
-             $method = 'Teller';
+        if (strpos($transactionType, 'Transfer') !== false) {
+            $method = 'Electronic';
+        } elseif (strpos($transactionType, 'Loan') !== false || 
+                  strpos($transactionType, 'Interest') !== false || 
+                  strpos($transactionType, 'Charge') !== false ||
+                  strpos($transactionType, 'Service') !== false) {
+            $method = 'System';
+        } elseif (strpos($description, 'Teller') !== false) {
+            $method = 'Teller';
         }
-        // If not set, it remains 'Cash' for typical Deposit/Withdrawal
 
         $formattedTransactions[] = [
             'transaction_id' => $transaction['transaction_id'],
             'reference' => $reference,
             'date' => $formattedDate,
-            'account_number' => $transaction['account_number'],
-            'title' => $transaction['description'] ?? $transaction['transaction_type'], // Add title field for HTML table
-            'customer_name' => $transaction['customer_name'],
-            'type' => $transaction['transaction_type'], // Use type_name from transaction_types
+            'account_number' => $transaction['account_number'] ?? 'N/A',
+            'title' => !empty($description) ? $description : $transactionType,
+            'customer_name' => trim($transaction['customer_name']) ?: 'Unknown Customer',
+            'type' => $transactionType,
             'method' => $method,
-            'amount' => number_format($transaction['amount'], 2),
+            'amount' => number_format(abs($transaction['amount']), 2),
             'status' => 'Completed', // All transactions in DB are completed
             'employee' => $transaction['employee_name'] ?? 'System',
             'raw_date' => $transaction['created_at']
