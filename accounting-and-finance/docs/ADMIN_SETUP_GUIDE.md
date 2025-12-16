@@ -1,10 +1,10 @@
 # 📋 Accounting & Finance System - Administrator Setup Guide
 
-> **Complete Step-by-Step Guide for Setting Up the Accounting & Finance System**  
-> Last Updated: December 2024  
+> **Complete Step-by-Step Guide for Setting Up the Accounting & Finance System**
+> Last Updated: December 2024
 > Version: 1.1.0
 
----
+***
 
 ## 📑 Table of Contents
 
@@ -19,32 +19,39 @@
 9. [Troubleshooting](#-troubleshooting)
 10. [System Credentials](#-system-credentials)
 
----
+***
 
 ## 🔧 Prerequisites
 
 Before starting, ensure you have the following:
 
-| Requirement | Minimum Version | Recommended |
-|-------------|-----------------|-------------|
-| **XAMPP** | 3.3.0 | Latest version |
-| **PHP** | 7.4 | 8.0+ |
-| **MySQL** | 5.7 | 8.0+ |
-| **Apache** | 2.4 | Latest |
+| Requirement     | Minimum Version       | Recommended    |
+| --------------- | --------------------- | -------------- |
+| **XAMPP**       | 3.3.0                 | Latest version |
+| **PHP**         | 7.4                   | 8.0+           |
+| **MySQL**       | 5.7                   | 8.0+           |
+| **Apache**      | 2.4                   | Latest         |
 | **Web Browser** | Chrome, Firefox, Edge | Latest version |
 
 ### Download XAMPP
 
 If you don't have XAMPP installed, download it from:
-- 🔗 [https://www.apachefriends.org/download.html](https://www.apachefriends.org/download.html)
 
----
+* 🔗 [https://www.apachefriends.org/download.html](https://www.apachefriends.org/download.html)
+
+***
+
+
+
+
+
 
 ## Step 1: Install and Configure XAMPP
 
 ### 1.1 Installation Location
 
 XAMPP should be installed in the default location:
+
 
 ```
 C:\xampp\
@@ -63,7 +70,7 @@ C:\xampp\
 └── xampp-control.exe ← Control panel to start/stop services
 ```
 
----
+***
 
 ## Step 2: Start Apache and MySQL Services
 
@@ -102,7 +109,7 @@ Your XAMPP Control Panel should look like this:
 
 > ⚠️ **Important:** Both Apache and MySQL must be running (GREEN) before proceeding!
 
----
+***
 
 ## Step 3: Place Project Files
 
@@ -141,14 +148,14 @@ C:\xampp\htdocs\
 
 Make sure these SQL files are present:
 
-| # | File Location | Description |
-|---|---------------|-------------|
-| 1 | `accounting-and-finance/database/sql/unified_schema.sql` | Main database schema (tables, structure) |
-| 2 | `accounting-and-finance/database/sql/location_data.sql` | Philippine provinces, cities, barangays |
-| 3 | `accounting-and-finance/database/sql/Sampled_data.sql` | Sample data, admin users, test data |
-| 4 | `accounting-and-finance/database/12-14-25 ALTER DB CHANGES HRIS.sql` | HRIS role and supervisor changes |
+| # | File Location                                                        | Description                              |
+| - | -------------------------------------------------------------------- | ---------------------------------------- |
+| 1 | `accounting-and-finance/database/sql/unified_schema.sql`             | Main database schema (tables, structure) |
+| 2 | `accounting-and-finance/database/sql/location_data.sql`              | Philippine provinces, cities, barangays  |
+| 3 | `accounting-and-finance/database/sql/Sampled_data.sql`               | Sample data, admin users, test data      |
+| 4 | `accounting-and-finance/database/12-14-25 ALTER DB CHANGES HRIS.sql` | HRIS role and supervisor changes         |
 
----
+***
 
 ## Step 4: Access phpMyAdmin
 
@@ -180,7 +187,7 @@ You should see the phpMyAdmin dashboard:
 └──────────────────┴──────────────────────────────────────────────┘
 ```
 
----
+***
 
 ## Step 5: Import Database Files
 
@@ -188,14 +195,14 @@ You should see the phpMyAdmin dashboard:
 
 The SQL files **MUST** be imported in this specific order:
 
-| Order | File | Description |
-|:-----:|------|-------------|
-| **1** | `unified_schema.sql` | Creates the database and all tables |
-| **2** | `location_data.sql` | Populates Philippine location data |
-| **3** | `Sampled_data.sql` | Adds admin users, sample employees, accounts |
-| **4** | `12-14-25 ALTER DB CHANGES HRIS.sql` | HRIS role management updates |
+| Order | File                                 | Description                                  |
+| :---: | ------------------------------------ | -------------------------------------------- |
+| **1** | `unified_schema.sql`                 | Creates the database and all tables          |
+| **2** | `location_data.sql`                  | Populates Philippine location data           |
+| **3** | `Sampled_data.sql`                   | Adds admin users, sample employees, accounts |
+| **4** | `12-14-25 ALTER DB CHANGES HRIS.sql` | HRIS role management updates                 |
 
----
+***
 
 ### 5.1 Import: unified_schema.sql (Database Schema)
 
@@ -207,14 +214,14 @@ The SQL files **MUST** be imported in this specific order:
    ```
 4. Select **`unified_schema.sql`**
 5. Make sure these settings are correct:
-   - Character set: `utf-8`
-   - Format: `SQL`
+   * Character set: `utf-8`
+   * Format: `SQL`
 6. Click **"Go"** or **"Import"** button
 7. Wait for success message: ✅ `Import has been successfully finished`
 
 > ⚠️ This creates the `BankingDB` database with all tables!
 
----
+***
 
 ### 5.2 Import: location_data.sql (Philippine Locations)
 
@@ -228,13 +235,9 @@ The SQL files **MUST** be imported in this specific order:
 5. Select **`location_data.sql`**
 6. Click **"Go"** or **"Import"** button
 
-> ⚠️ **Note:** This file is large (483,000+ lines). Import may take 1-2 minutes.
-> 
-> If you get a timeout error, try:
-> - Using the phpMyAdmin SQL tab to paste file contents
-> - Or use MySQL command line
+> ⚠️ **Note:** This file is large (483,000+ lines). Import may take 1-2 minutes.If you get a timeout error, try:- Using the phpMyAdmin SQL tab to paste file contents- Or use MySQL command line
 
----
+***
 
 ### 5.3 Import: Sampled_data.sql (Admin & Sample Data)
 
@@ -249,16 +252,11 @@ The SQL files **MUST** be imported in this specific order:
 6. Click **"Go"** or **"Import"** button
 7. Wait for success message
 
-> ✅ **This file creates:**
-> - Admin user account
-> - Sample employees
-> - Chart of accounts
-> - Departments and positions
-> - Sample attendance data
+> ✅ **This file creates:**- Admin user account- Sample employees- Chart of accounts- Departments and positions- Sample attendance data
 > - Fiscal periods
 > - And more...
 
----
+***
 
 ### 5.4 Import: HRIS Migration Script
 
@@ -272,30 +270,31 @@ The SQL files **MUST** be imported in this specific order:
 5. Select **`12-14-25 ALTER DB CHANGES HRIS.sql`**
 6. Click **"Go"** or **"Import"** button
 7. Wait for success messages showing:
-   - `Manager role migrated to Supervisor`
-   - `Department supervisors created!`
-   - `=== MIGRATION COMPLETE ===`
+   * `Manager role migrated to Supervisor`
+   * `Department supervisors created!`
+   * `=== MIGRATION COMPLETE ===`
 
----
+***
 
 ### 5.5 Verify Database Import
 
 After all imports, your `BankingDB` database should have these key tables:
 
-| Core Tables | HRIS Tables | Banking Tables |
-|-------------|-------------|----------------|
-| `users` | `employee` | `bank_customers` |
-| `roles` | `department` | `bank_accounts` |
-| `user_account` | `position` | `bank_transactions` |
-| `accounts` | `attendance` | `customer_accounts` |
-| `journal_entries` | `leave_request` | `bank_employees` |
-| `fiscal_periods` | `employee_refs` | `account_applications` |
+| Core Tables       | HRIS Tables     | Banking Tables         |
+| ----------------- | --------------- | ---------------------- |
+| `users`           | `employee`      | `bank_customers`       |
+| `roles`           | `department`    | `bank_accounts`        |
+| `user_account`    | `position`      | `bank_transactions`    |
+| `accounts`        | `attendance`    | `customer_accounts`    |
+| `journal_entries` | `leave_request` | `bank_employees`       |
+| `fiscal_periods`  | `employee_refs` | `account_applications` |
 
 To verify:
+
 1. Click on **`BankingDB`** in the left sidebar
 2. You should see 50+ tables listed
 
----
+***
 
 ## Step 6: Access the Application
 
@@ -315,13 +314,13 @@ http://localhost/Evergreen/accounting-and-finance/core/login.php
 
 ### 6.2 URL Structure
 
-| URL | Description |
-|-----|-------------|
-| `http://localhost/Evergreen/accounting-and-finance/` | Main entry (redirects to login) |
-| `http://localhost/Evergreen/accounting-and-finance/core/login.php` | Login page |
-| `http://localhost/Evergreen/accounting-and-finance/core/dashboard.php` | Dashboard (after login) |
+| URL                                                                    | Description                     |
+| ---------------------------------------------------------------------- | ------------------------------- |
+| `http://localhost/Evergreen/accounting-and-finance/`                   | Main entry (redirects to login) |
+| `http://localhost/Evergreen/accounting-and-finance/core/login.php`     | Login page                      |
+| `http://localhost/Evergreen/accounting-and-finance/core/dashboard.php` | Dashboard (after login)         |
 
----
+***
 
 ## Step 7: Login to the System
 
@@ -329,38 +328,31 @@ http://localhost/Evergreen/accounting-and-finance/core/login.php
 
 Use these credentials to log in as administrator:
 
-| Field | Value |
-|-------|-------|
-| **Email** | `admin@system.com` |
-| **Password** | `admin123` |
+| Field        | Value              |
+| ------------ | ------------------ |
+| **Email**    | `admin` |
+| **Password** | `admin123`         |
 
-### 7.2 Alternative Finance Admin
-
-| Field | Value |
-|-------|-------|
-| **Username** | `finance.admin` |
-| **Email** | `finance.admin@evergreen.com` |
-| **Password** | `Finance2025` |
-
-### 7.3 After Successful Login
+### 7.2 After Successful Login
 
 You will be redirected to the **Dashboard** with access to:
 
-- 📊 **Dashboard** - Overview and statistics
-- 📈 **Transaction Reading** - View all transactions
-- 📒 **General Ledger** - Journal entries and accounts
-- 💰 **Payroll Management** - Process employee payroll
-- 📑 **Expense Tracking** - Manage expenses
-- 📋 **Financial Reporting** - Generate reports
-- 🏦 **Loan Accounting** - Manage loans
+* 📊 **Dashboard** - Overview and statistics
+* 📈 **Transaction Reading** - View all transactions
+* 📒 **General Ledger** - Journal entries and accounts
+* 💰 **Payroll Management** - Process employee payroll
+* 📑 **Expense Tracking** - Manage expenses
+* 📋 **Financial Reporting** - Generate reports
+* 🏦 **Loan Accounting** - Manage loans
 
----
+***
 
 ## 🔧 Troubleshooting
 
 ### Problem: "Cannot connect to database"
 
 **Solution:**
+
 1. Verify MySQL is running in XAMPP Control Panel
 2. Check `config/database.php` settings:
    ```php
@@ -370,28 +362,30 @@ You will be redirected to the **Dashboard** with access to:
    $password = '';  // Empty for XAMPP default
    ```
 
----
+***
 
 ### Problem: "User not found" or "Invalid credentials"
 
 **Solution:**
+
 1. Ensure `Sampled_data.sql` was imported successfully
 2. Check if the `users` table has the admin user:
-   - Go to phpMyAdmin
-   - Select `BankingDB` → `users` table
-   - Verify `admin@system.com` exists
+   * Go to phpMyAdmin
+   * Select `BankingDB` → `users` table
+   * Verify [`admin@system.com`](mailto\:admin@system.com) exists
 3. Try resetting admin password:
-   - Go to: `http://localhost/Evergreen/accounting-and-finance/utils/fix_admin_password.php`
+   * Go to: `http://localhost/Evergreen/accounting-and-finance/utils/fix_admin_password.php`
 
----
+***
 
 ### Problem: "Table doesn't exist" errors
 
 **Solution:**
+
 1. Re-import `unified_schema.sql`
 2. Make sure `BankingDB` database exists
 
----
+***
 
 ### Problem: Import timeout for large files
 
@@ -409,85 +403,27 @@ You will be redirected to the **Dashboard** with access to:
 3. Restart Apache
 4. Try importing again
 
----
-
-### Problem: Port 80 is in use (Apache won't start)
-
-**Solution:**
-1. Check which program is using port 80:
-   - In XAMPP Control Panel, click **"Netstat"**
-2. Common culprits: Skype, IIS, World Wide Web Publishing Service
-3. Stop the conflicting service, or change Apache port to 8080
-
----
-
-## 🔐 System Credentials
-
-### Administrator Accounts
-
-| Role | Username/Email | Password | Access Level |
-|------|----------------|----------|--------------|
-| **System Admin** | `admin@system.com` | `admin123` | Full access |
-| **Finance Admin** | `finance.admin@evergreen.com` | `Finance2025` | Accounting modules |
-| **HR Manager** | `hrmanager` | `password` | HR modules |
-
-### Department Supervisor Accounts
-
-All supervisor accounts use password: `password`
-
-| Department | Username | Access |
-|------------|----------|--------|
-| Customer Service | `supervisor_cs` | CS dept only |
-| Finance | `supervisor_finance` | Finance dept only |
-| Human Resources | `supervisor_hr` | HR dept only |
-| IT | `supervisor_it` | IT dept only |
-| Marketing | `supervisor_marketing` | Marketing dept only |
-| Operations | `supervisor_operations` | Operations dept only |
-| Sales | `supervisor_sales` | Sales dept only |
-
----
-
-## 📱 Quick Reference
-
-### Key URLs
-
-| System | URL |
-|--------|-----|
-| **Application** | `http://localhost/Evergreen/accounting-and-finance/` |
-| **phpMyAdmin** | `http://localhost/phpmyadmin/` |
-| **HRIS System** | `http://localhost/Evergreen/hris-sia/` |
-| **DB Test** | `http://localhost/Evergreen/accounting-and-finance/test_db_connection.php` |
-
-### Important File Locations
-
-| File | Location |
-|------|----------|
-| Database Config | `C:\xampp\htdocs\Evergreen\accounting-and-finance\config\database.php` |
-| Session Management | `C:\xampp\htdocs\Evergreen\accounting-and-finance\includes\session.php` |
-| PHP Config | `C:\xampp\php\php.ini` |
-| Apache Config | `C:\xampp\apache\conf\httpd.conf` |
-
----
+***
 
 ## ✅ Setup Checklist
 
 Use this checklist to verify your setup:
 
-- [ ] XAMPP installed at `C:\xampp\`
-- [ ] Apache service is running (GREEN)
-- [ ] MySQL service is running (GREEN)
-- [ ] Project files in `C:\xampp\htdocs\Evergreen\accounting-and-finance\`
-- [ ] `unified_schema.sql` imported successfully
-- [ ] `location_data.sql` imported successfully
-- [ ] `Sampled_data.sql` imported successfully
-- [ ] `12-14-25 ALTER DB CHANGES HRIS.sql` imported successfully
-- [ ] Can access `http://localhost/phpmyadmin/`
-- [ ] `BankingDB` database exists with 50+ tables
-- [ ] Can access `http://localhost/Evergreen/accounting-and-finance/`
-- [ ] Can login with `admin@system.com` / `admin123`
-- [ ] Dashboard loads correctly
+* [ ] XAMPP installed at `C:\xampp\`
+* [ ] Apache service is running (GREEN)
+* [ ] MySQL service is running (GREEN)
+* [ ] Project files in `C:\xampp\htdocs\Evergreen\accounting-and-finance\`
+* [ ] `unified_schema.sql` imported successfully
+* [ ] `location_data.sql` imported successfully
+* [ ] `Sampled_data.sql` imported successfully
+* [ ] `12-14-25 ALTER DB CHANGES HRIS.sql` imported successfully
+* [ ] Can access `http://localhost/phpmyadmin/`
+* [ ] `BankingDB` database exists with 50+ tables
+* [ ] Can access `http://localhost/Evergreen/accounting-and-finance/`
+* [ ] Can login with [`admin@system.com`](mailto\:admin@system.com) / `admin123`
+* [ ] Dashboard loads correctly
 
----
+***
 
 ## 📞 Need Help?
 
@@ -496,10 +432,10 @@ If you encounter issues not covered in this guide:
 1. 📖 Check other documentation in the `docs/` folder
 2. 🔍 Review error messages in the browser console (F12)
 3. 📋 Check XAMPP error logs: `C:\xampp\apache\logs\error.log`
-4. 💻 Contact your system administrator
+4. 💻 Contact Carlo Baclao for questions!
 
----
+***
 
-**Document Version:** 1.0  
-**Created:** December 2024  
+**Document Version:** 1.0
+**Created:** December 2024
 **Compatible with:** XAMPP 3.3+, PHP 7.4+, MySQL 5.7+
