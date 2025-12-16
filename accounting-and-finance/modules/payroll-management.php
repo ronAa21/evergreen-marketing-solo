@@ -2142,8 +2142,8 @@ if ($attendance_payroll_adjustments && isset($attendance_payroll_adjustments['at
                         $ps_adj = $attendance_payroll_adjustments['salary_adjustments'];
                         $ps_att = $attendance_payroll_adjustments['attendance_summary'];
                     ?>
-                    <!-- Attendance Summary for Payslip -->
-                    <div class="overall-section">
+                    <!-- Attendance Summary for Payslip - Hidden in Print -->
+                    <div class="overall-section attendance-summary-print-hide no-print">
                         <div class="overall-section-title"><i class="fas fa-calendar-check me-2"></i>Attendance Summary</div>
                         <div class="row text-center mb-3">
                             <div class="col-3">

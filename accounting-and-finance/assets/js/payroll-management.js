@@ -525,19 +525,39 @@ function formatDate(dateString) {
 }
 
 /**
- * Print payslip
+ * Print payslip - Receipt style
  */
 function printPayslip() {
-    // Add a class to body to indicate printing
-    document.body.classList.add('printing');
+    // Switch to Overall tab before printing
+    const overallTab = document.getElementById('overall-tab');
+    const overallPane = document.getElementById('overall');
     
-    // Print the page
-    window.print();
-    
-    // Remove the printing class after a short delay
-    setTimeout(() => {
-        document.body.classList.remove('printing');
-    }, 1000);
+    if (overallTab && overallPane) {
+        // Activate the Overall tab
+        const tabInstance = new bootstrap.Tab(overallTab);
+        tabInstance.show();
+        
+        // Wait for tab transition then print
+        setTimeout(() => {
+            // Add printing class
+            document.body.classList.add('printing');
+            
+            // Print the page
+            window.print();
+            
+            // Remove the printing class after printing
+            setTimeout(() => {
+                document.body.classList.remove('printing');
+            }, 500);
+        }, 300);
+    } else {
+        // Fallback: just print
+        document.body.classList.add('printing');
+        window.print();
+        setTimeout(() => {
+            document.body.classList.remove('printing');
+        }, 500);
+    }
 }
 
 /**

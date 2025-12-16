@@ -1737,11 +1737,11 @@ body {
 }
 
 /* ========================================
-   PRINT STYLES
+   PRINT STYLES - REALISTIC PAYSLIP RECEIPT
    ======================================== */
 
 @media print {
-    /* Hide navigation and UI elements */
+    /* Hide ALL navigation and UI elements */
     .main-header,
     .navbar,
     .navbar-custom,
@@ -1755,234 +1755,187 @@ body {
     .btn-view-history,
     .history-filters,
     footer,
-    .main-footer {
+    .main-footer,
+    .no-print,
+    .dont-print,
+    .selection-card,
+    .selected-period-badge {
         display: none !important;
     }
     
-    body {
+    /* Hide attendance summary cards - CRITICAL: Remove from print */
+    .attendance-summary-card,
+    .attendance-summary-section,
+    .attendance-records-section,
+    .attendance-statistics,
+    .hours-summary-card,
+    .payroll-impact-card,
+    .payroll-impact-alert,
+    .attendance-summary-print-hide,
+    #employee-details,
+    #tax-mgmt {
+        display: none !important;
+    }
+    
+    /* Hide the attendance summary row in Overall tab during print */
+    #overall .overall-section .row.text-center.mb-3,
+    #overall .attendance-summary-print-hide {
+        display: none !important;
+    }
+    
+    /* Page setup - A4 portrait for standard printing */
+    @page {
+        size: A4 portrait;
+        margin: 15mm 20mm;
+    }
+    
+    html, body {
         background: #fff !important;
         margin: 0 !important;
         padding: 0 !important;
+        font-family: 'Courier New', Courier, monospace !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+        width: 100% !important;
     }
     
-    /* Show only the active tab content */
+    /* Force only Overall tab to show */
     .tab-content > .tab-pane {
-        display: block !important;
+        display: none !important;
     }
     
-    .tab-content > .tab-pane:not(.show.active) {
-        display: none !important;
+    .tab-content > #overall {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    
+    /* Main container */
+    main.container-fluid {
+        padding: 0 !important;
+        margin: 0 auto !important;
+        max-width: 180mm !important;
     }
     
     .payroll-content-card {
         box-shadow: none !important;
-        page-break-inside: avoid;
+        border: 2px solid #000 !important;
         margin: 0 !important;
-        padding: 20px !important;
+        padding: 15px !important;
+        background: #fff !important;
+        border-radius: 0 !important;
     }
     
-    /* Hide attendance summary cards in print */
-    .attendance-summary-card,
-    .attendance-summary-section,
-    .attendance-records-section,
-    .attendance-statistics {
-        display: none !important;
+    /* ========================================
+       PAYSLIP HEADER - Company Info
+       ======================================== */
+    
+    .payroll-section-title {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+        margin: 0 0 15px 0 !important;
+        padding: 10px 0 !important;
+        border-bottom: 3px double #000 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 2px !important;
+        color: #000 !important;
     }
     
-    /* Hide employer contribution section */
-    .tax-section:has(.tax-section-header:contains("Employer")) {
-        display: none !important;
+    .overall-header {
+        text-align: center !important;
+        margin-bottom: 15px !important;
+        padding: 10px 0 !important;
+        border: none !important;
+        background: none !important;
+        border-radius: 0 !important;
+        border-bottom: 1px solid #000 !important;
     }
     
-    /* Remove page numbering and margins */
-    @page {
-        margin: 0.5in !important;
-        size: A4;
-        @bottom-center {
-            content: "" !important;
-        }
-        @bottom-right {
-            content: "" !important;
-        }
-        @bottom-left {
-            content: "" !important;
-        }
-        @top-center {
-            content: "" !important;
-        }
-        @top-right {
-            content: "" !important;
-        }
-        @top-left {
-            content: "" !important;
-        }
+    .overall-header .bank-name {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: #000 !important;
+        text-transform: uppercase !important;
     }
     
-    /* Hide any page numbering elements */
-    .page-number,
-    .page-counter,
-    [class*="page-"],
-    .page-break,
-    .page-break-before,
-    .page-break-after {
-        display: none !important;
+    .overall-header .company-name {
+        font-size: 10px !important;
+        color: #000 !important;
     }
     
-    /* Ensure clean print layout */
-    * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
+    /* ========================================
+       EMPLOYEE INFORMATION SECTION
+       ======================================== */
     
-    /* Hide browser-specific print elements */
-    .no-print,
-    .dont-print {
-        display: none !important;
-    }
-    
-    /* Ensure proper spacing for print */
     .overall-section {
-        margin-bottom: 20px !important;
-        page-break-inside: avoid;
+        margin-bottom: 15px !important;
+        page-break-inside: avoid !important;
     }
     
     .overall-section-title {
-        page-break-after: avoid;
-        page-break-inside: avoid;
-        background: #f5f5f5 !important;
+        background: #f0f0f0 !important;
         color: #000 !important;
-        border: 1px solid #000 !important;
-        padding: 10px 15px !important;
-        font-size: 14px !important;
+        padding: 8px 10px !important;
         margin-bottom: 10px !important;
-    }
-    
-    .overall-summary-box {
-        margin-top: 20px !important;
-        page-break-inside: avoid;
-        border: 2px solid #000 !important;
-        background: #f9f9f9 !important;
-        padding: 20px !important;
-        display: block !important;
-        visibility: visible !important;
-        color: #000 !important;
-    }
-    
-    /* Summary Box */
-    .overall-summary-row {
-        padding: 10px 0 !important;
-        border-bottom: 1px solid #000 !important;
-        font-size: 13px !important;
-        display: flex !important;
-        justify-content: space-between !important;
-        color: #000 !important;
-    }
-    
-    .overall-summary-row:last-child {
-        border-bottom: none !important;
-        border-top: 2px solid #000 !important;
-        font-size: 16px !important;
+        font-size: 11px !important;
         font-weight: 700 !important;
-        padding-top: 15px !important;
-        margin-top: 10px !important;
-        color: #000 !important;
+        border: 1px solid #000 !important;
+        border-radius: 0 !important;
+        text-transform: uppercase !important;
     }
     
-    .overall-summary-row .label {
-        font-weight: 600 !important;
-        color: #000 !important;
+    .overall-section-title i {
+        display: none !important;
     }
     
-    .overall-summary-row .value {
-        font-weight: 700 !important;
-        font-family: 'Courier New', monospace !important;
-        color: #000 !important;
-    }
-    
-    /* Clean payslip layout */
-    .overall-header {
-        text-align: center;
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #000;
-        page-break-after: avoid;
-    }
-    
-    /* Employee Information Table */
+    /* Employee Info Table - Professional Style */
     .employee-info-table {
         width: 100% !important;
         border-collapse: collapse !important;
-        page-break-inside: avoid;
         margin-bottom: 15px !important;
+        font-size: 10px !important;
+        border: 1px solid #000 !important;
+    }
+    
+    .employee-info-table tr {
+        border-bottom: 1px solid #ccc !important;
+    }
+    
+    .employee-info-table tr:last-child {
+        border-bottom: none !important;
     }
     
     .employee-info-table td {
-        padding: 8px 12px !important;
-        border: 1px solid #000 !important;
-        font-size: 12px !important;
+        padding: 6px 10px !important;
+        border: none !important;
+        font-size: 10px !important;
+        background: none !important;
+        vertical-align: middle !important;
     }
     
     .employee-info-table td:first-child {
-        font-weight: 600 !important;
-        background: #f5f5f5 !important;
+        font-weight: 700 !important;
         width: 40% !important;
+        background: #f9f9f9 !important;
+        color: #000 !important;
+        border-right: 1px solid #ccc !important;
     }
     
-    /* Payroll Items Table (Earnings and Deductions) */
-    .payroll-items-table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        page-break-inside: avoid;
-        border: 1px solid #000 !important;
-        margin-bottom: 15px !important;
-    }
-    
-    .payroll-items-table thead {
-        display: table-header-group !important;
-    }
-    
-    .payroll-items-table thead th {
-        background: #f5f5f5 !important;
-        border: 1px solid #000 !important;
-        padding: 8px 12px !important;
-        font-size: 12px !important;
-        font-weight: 700 !important;
+    .employee-info-table td:last-child {
         text-align: left !important;
+        font-weight: 400 !important;
+        padding-left: 15px !important;
     }
     
-    .payroll-items-table tbody td {
-        border: 1px solid #000 !important;
-        padding: 8px 12px !important;
-        font-size: 12px !important;
-    }
+    /* ========================================
+       EARNINGS & DEDUCTIONS - Side by Side
+       ======================================== */
     
-    .payroll-items-table tfoot {
-        display: table-footer-group !important;
-    }
-    
-    .payroll-items-table tfoot td {
-        background: #f5f5f5 !important;
-        border: 1px solid #000 !important;
-        padding: 10px 12px !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-    }
-    
-    .payroll-total-row {
-        border-top: 2px solid #000 !important;
-    }
-    
-    .amount-cell {
-        text-align: right !important;
-        font-family: 'Courier New', monospace !important;
-    }
-    
-    /* Two-column layout for print */
     .payroll-two-column {
         display: flex !important;
         gap: 20px !important;
-        margin-bottom: 20px !important;
-        page-break-inside: avoid;
+        margin-bottom: 15px !important;
     }
     
     .payroll-two-column > div {
@@ -1990,45 +1943,207 @@ body {
         min-width: 0 !important;
     }
     
-    /* Payslip Title */
-    .payroll-section-title {
-        font-size: 18px !important;
-        font-weight: 700 !important;
-        margin-bottom: 15px !important;
-        text-align: center !important;
-        page-break-after: avoid;
+    /* Payroll Items Table - Professional Style */
+    .payroll-items-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-bottom: 10px !important;
+        font-size: 10px !important;
+        border: 1px solid #000 !important;
     }
     
-    /* Hide tabs navigation in print */
-    .nav-tabs,
-    .nav-link {
+    .payroll-items-table thead {
+        display: table-header-group !important;
+    }
+    
+    .payroll-items-table thead th {
+        background: #f0f0f0 !important;
+        color: #000 !important;
+        padding: 6px 8px !important;
+        font-size: 9px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .payroll-items-table tbody td {
+        padding: 5px 8px !important;
+        border: none !important;
+        border-bottom: 1px dotted #ccc !important;
+        font-size: 10px !important;
+        background: none !important;
+    }
+    
+    .payroll-items-table tbody tr:last-child td {
+        border-bottom: none !important;
+    }
+    
+    .payroll-items-table tbody td:first-child {
+        text-align: left !important;
+    }
+    
+    .payroll-items-table tbody td:last-child,
+    .payroll-items-table .amount-cell {
+        text-align: right !important;
+        font-family: 'Courier New', monospace !important;
+        font-weight: 600 !important;
+    }
+    
+    .payroll-items-table tfoot {
+        display: table-footer-group !important;
+    }
+    
+    .payroll-items-table tfoot td,
+    .payroll-items-table .payroll-total-row td {
+        padding: 4px 0 !important;
+        border: none !important;
+        border-top: 1px solid #000 !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        background: none !important;
+    }
+    
+    /* ========================================
+       SUMMARY BOX - Net Pay Highlight
+       ======================================== */
+    
+    .overall-summary-box {
+        background: #f9f9f9 !important;
+        color: #000 !important;
+        padding: 15px !important;
+        margin-top: 20px !important;
+        border-radius: 0 !important;
+        border: 2px solid #000 !important;
+    }
+    
+    .overall-summary-box .overall-section-title {
+        display: block !important;
+        background: #000 !important;
+        color: #fff !important;
+        padding: 8px 10px !important;
+        margin: -15px -15px 15px -15px !important;
+        font-size: 11px !important;
+        border: none !important;
+    }
+    
+    .overall-summary-box .table {
+        width: 100% !important;
+        margin: 0 !important;
+        font-size: 10px !important;
+        border: none !important;
+    }
+    
+    .overall-summary-box .table tr {
+        border: none !important;
+    }
+    
+    .overall-summary-box .table td {
+        padding: 5px 0 !important;
+        border: none !important;
+        border-bottom: 1px dotted #999 !important;
+        background: none !important;
+        color: #000 !important;
+        font-size: 10px !important;
+    }
+    
+    .overall-summary-box .table .ps-4 {
+        padding-left: 20px !important;
+    }
+    
+    .overall-summary-box .table .text-muted,
+    .overall-summary-box .table .small {
+        color: #444 !important;
+        font-size: 9px !important;
+    }
+    
+    .overall-summary-box .table .text-end {
+        text-align: right !important;
+        font-family: 'Courier New', monospace !important;
+    }
+    
+    /* Net Pay Row - Highlighted */
+    .overall-summary-box .table-success,
+    .overall-summary-box .table tr.table-success {
+        background: #e8f5e9 !important;
+    }
+    
+    .overall-summary-box .table-success td {
+        padding: 12px 5px !important;
+        border-top: 3px double #000 !important;
+        border-bottom: none !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        background: #e8f5e9 !important;
+    }
+    
+    .overall-summary-box .table-success .fs-5 {
+        font-size: 16px !important;
+    }
+    
+    .overall-summary-box .text-success {
+        color: #000 !important;
+    }
+    
+    .overall-summary-box .text-danger {
+        color: #000 !important;
+    }
+    
+    /* Icons in print - hide decorative icons */
+    .overall-summary-box i.fas,
+    .overall-summary-box i.fa,
+    .overall-section-title i.fas,
+    .overall-section-title i.fa {
         display: none !important;
     }
     
-    /* Ensure proper font sizes for print */
-    body {
-        font-size: 12px !important;
-        line-height: 1.4 !important;
+    /* ========================================
+       SIGNATURE SECTION
+       ======================================== */
+    
+    .overall-summary-box::after {
+        content: "Employee Signature: ________________     Date: ________________" !important;
+        display: block !important;
+        text-align: left !important;
+        margin-top: 30px !important;
+        padding-top: 20px !important;
+        font-size: 10px !important;
+        color: #000 !important;
+        border-top: 1px solid #ccc !important;
     }
     
-    /* Bank name and company name */
-    .bank-name {
-        font-size: 16px !important;
+    /* Hide color classes in print */
+    .text-success, .text-danger, .text-warning, .text-info, .text-primary {
+        color: #000 !important;
+    }
+    
+    .bg-success, .bg-danger, .bg-warning, .bg-info, .bg-primary,
+    .bg-opacity-10 {
+        background: none !important;
+    }
+    
+    /* Ensure all text is black */
+    * {
+        color: #000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    /* Hide Bootstrap utility classes that add unwanted styling */
+    .fw-bold {
         font-weight: 700 !important;
     }
     
-    .company-name {
-        font-size: 14px !important;
-        margin-top: 5px !important;
+    .small {
+        font-size: 8px !important;
     }
     
-    .payroll-column-card {
-        flex: 1;
+    /* Page break control */
+    .overall-section {
+        page-break-inside: avoid !important;
     }
     
-    /* Ensure summary box is always visible in print */
-    .overall-summary-box * {
-        color: #000 !important;
+    .overall-summary-box {
+        page-break-inside: avoid !important;
     }
 }
 
