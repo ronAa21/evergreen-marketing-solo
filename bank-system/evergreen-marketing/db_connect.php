@@ -1,4 +1,7 @@
 <?php
+// Suppress warnings for clean JSON output
+error_reporting(0);
+
 $host = "localhost";
 $user = "root"; 
 $pass = ""; 

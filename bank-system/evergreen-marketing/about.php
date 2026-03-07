@@ -777,7 +777,8 @@
                 </div>
             </div>
 
-            <a href="#loans">Loans</a>
+            <!-- REPLACED: LOANS WITH WHAT'S NEW -->
+            <a href="Content-view/index.php">What's new</a>
             <a href="about.php">About Us</a>
         </div>
 

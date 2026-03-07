@@ -1425,8 +1425,9 @@
                 </div>
         </div>
 
-                     <a href="/Evergreen/LoanSubsystem/index.php">Loans</a>
-                     <a href="about.php">About Us</a>
+            <!-- replace the loans with content display -->
+            <a href="Content-view/index.php">What's new</a>
+            <a href="about.php">About Us</a>
         </div>
 
         <div class="nav-buttons">

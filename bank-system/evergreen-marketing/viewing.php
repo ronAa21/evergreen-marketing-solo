@@ -417,6 +417,7 @@
         }
 
         /* Loan Services Section */
+        /* REPLACED: CONTENT-VIEW */
         .loans {
             background: linear-gradient(to right, #fef3e2 50%, #fef3e2 50%);
             padding: 5rem 5%;

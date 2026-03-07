@@ -1164,7 +1164,8 @@
                 </div>
             </div>
 
-            <a href="#loans">Loans</a>
+            <!-- replaced: loans -->
+            <a href="../Content-view/index.php">What's new</a>
             <a href="../about.php">About Us</a>
         </div>
 

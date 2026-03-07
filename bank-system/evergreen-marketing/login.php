@@ -30,8 +30,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['last_name'] = $row['last_name'];
                 $_SESSION['bank_id'] = $row['bank_id'];
                 $_SESSION['full_name'] = $row['first_name'] . ' ' . $row['last_name'];
+                $_SESSION['is_admin'] = $row['is_admin'];
 
                 $success = true;
+                
+                // Redirect based on user role
+                if ($row['is_admin'] == 1) {
+                    header("Location: Admin-side/frontend/admin-landingpage.php");
+                } else {
+                    header("Location: viewingpage.php");
+                }
+                exit();
             } else {
                 $login_failed = true;
             }
@@ -749,7 +758,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       document.body.appendChild(modal);
       
       setTimeout(() => {
-        window.location.href = 'viewingpage.php';
+        <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] == 1): ?>
+          window.location.href = 'Admin-side/frontend/admin-landingpage.php';
+        <?php else: ?>
+          window.location.href = 'viewingpage.php';
+        <?php endif; ?>
       }, 2000);
     }
 

@@ -929,8 +929,9 @@
                 </div>
         </div>
 
-                     <a href="#loans">Loans</a>
-                     <a href="../about.php">About Us</a>
+        <!-- Replaced: loans -->
+        <a href="../Content-view/index.php">What's new</a>
+        <a href="../about.php">About Us</a>
         </div>
 
         <div class="nav-buttons">
