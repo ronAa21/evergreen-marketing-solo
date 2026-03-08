@@ -114,7 +114,7 @@ function applyReferral($conn, $user_id) {
         $referrer_name = $referrer['first_name'] . ' ' . $referrer['last_name'];
         $stmt->close();
         
-        $sql = "SELECT customer_id FROM referrals WHERE referred_id = ?";
+        $sql = "SELECT id FROM referrals WHERE referred_id = ?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("i", $user_id);
         $stmt->execute();

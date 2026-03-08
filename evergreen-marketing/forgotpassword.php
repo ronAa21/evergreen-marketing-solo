@@ -59,13 +59,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 try {
                     // Server settings
+                    $mail->SMTPDebug = SMTP::DEBUG_OFF;
                     $mail->isSMTP();
-                    $mail->Host       = 'smtp.gmail.com'; // Change to your SMTP host
+                    $mail->Host       = 'smtp.gmail.com';
                     $mail->SMTPAuth   = true;
-                    $mail->Username   = 'evrgrn.64@gmail.com'; // Your email
-                    $mail->Password   = 'dourhhbymvjejuct'; // Your app password
+                    $mail->Username   = 'evrgrn.64@gmail.com';
+                    $mail->Password   = 'dourhhbymvjejuct';
                     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                     $mail->Port       = 587;
+                    
+                    $mail->SMTPOptions = array(
+                        'ssl' => array(
+                            'verify_peer' => false,
+                            'verify_peer_name' => false,
+                            'allow_self_signed' => true
+                        )
+                    );
+                    $mail->Timeout = 30;
                     
                     // Recipients
                     $mail->setFrom('evrgrn.64@gmail.com', 'Evergreen Banking');
@@ -94,12 +104,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     ';
                     $mail->AltBody = "Hello " . $row['first_name'] . ",\n\nYour password reset verification code is: " . $otp . "\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nEvergreen Bank";
                     
+                    error_log("Attempting to send password reset email to: " . $email);
                     $mail->send();
+                    error_log("Password reset email sent successfully to: " . $email);
                     $step = 2;
                 } catch (Exception $e) {
-                    $error = "Failed to send verification code. Please try again.";
-                    // Optional: Log the error for debugging
-                    // error_log("Mailer Error: " . $mail->ErrorInfo);
+                    error_log("Failed to send password reset email: " . $mail->ErrorInfo);
+                    $error = "Failed to send verification code. Error: " . $mail->ErrorInfo;
                 }
             } else {
                 $error = "No account found with this email and Bank ID.";
@@ -188,6 +199,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             try {
                 // Server settings
+                $mail->SMTPDebug = SMTP::DEBUG_OFF;
                 $mail->isSMTP();
                 $mail->Host       = 'smtp.gmail.com';
                 $mail->SMTPAuth   = true;
@@ -195,6 +207,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->Password   = 'dourhhbymvjejuct';
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port       = 587;
+                
+                $mail->SMTPOptions = array(
+                    'ssl' => array(
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    )
+                );
+                $mail->Timeout = 30;
                 
                 // Recipients
                 $mail->setFrom('evrgrn.64@gmail.com', 'Evergreen Banking');
@@ -222,13 +243,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ';
                 $mail->AltBody = "Hello " . $row['first_name'] . ",\n\nYour new password reset verification code is: " . $otp . "\n\nThis code will expire in 10 minutes.\n\nBest regards,\nEvergreen Bank";
                 
+                error_log("Attempting to resend password reset email to: " . $_SESSION['reset_email']);
                 $mail->send();
+                error_log("Password reset email resent successfully");
                 $step = 2;
+                $success = "New verification code sent!";
             } catch (Exception $e) {
-                $error = "Failed to resend verification code. Please try again.";
+                error_log("Failed to resend password reset email: " . $mail->ErrorInfo);
+                $error = "Failed to resend verification code. Error: " . $mail->ErrorInfo;
+                $step = 2;
             }
             
             $stmt->close();
+        } else {
+            $error = "Session expired. Please start over.";
+            $step = 1;
         }
     }
 }
@@ -715,6 +744,12 @@ if (isset($_GET['clear_session'])) {
 
       <?php if ($error): ?>
         <div class="error-banner"><?php echo htmlspecialchars($error); ?></div>
+      <?php endif; ?>
+
+      <?php if (isset($success) && $success): ?>
+        <div style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border: 1px solid #28a745; color: #155724; padding: 14px 18px; border-radius: 12px; margin-bottom: 24px; font-size: 13px; text-align: center; font-weight: 500;">
+          <?php echo htmlspecialchars($success); ?>
+        </div>
       <?php endif; ?>
 
       <form method="POST" id="otpForm">

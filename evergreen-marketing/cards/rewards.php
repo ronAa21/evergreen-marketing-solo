@@ -1272,7 +1272,6 @@
                     <div class="discount-body">
                         <div class="discount-label">DISCOUNT</div>
                         <div class="discount-description">Enjoy 50% savings on your next getaway when you book with your EVERGREEN Card.</div>
-                        <button class="discount-redeem-button">Redeem</button>
                     </div>
                 </div>
 
@@ -1286,7 +1285,6 @@
                     <div class="discount-body">
                         <div class="discount-label">DISCOUNT</div>
                         <div class="discount-description">Enjoy 20% off on your favorite meals when you dine with your EVERGREEN Card.</div>
-                        <button class="discount-redeem-button">Redeem</button>
                     </div>
                 </div>
             </div>

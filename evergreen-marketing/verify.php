@@ -53,20 +53,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 // Format birthday to MySQL DATE format (YYYY-MM-DD)
                 $birthday_formatted = date('Y-m-d', strtotime($registration_data['birthday']));
                 
-                // Insert into bank_customers table (without birthday - it goes to customer_profiles)
-                $sql = "INSERT INTO bank_customers (first_name, middle_name, last_name, email, contact_number, password_hash, verification_code, bank_id, referral_code, total_points, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 1)";
+                // Insert into bank_customers table (including birthday)
+                $sql = "INSERT INTO bank_customers (first_name, middle_name, last_name, email, contact_number, birthday, password_hash, verification_code, bank_id, referral_code, total_points, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 1)";
                 
                 $stmt = $conn->prepare($sql);
                 if (!$stmt) {
                     throw new Exception("Database preparation error: " . $conn->error);
                 }
                 
-                $stmt->bind_param("sssssssss",
+                $stmt->bind_param("ssssssssss",
                     $registration_data['first_name'],
                     $registration_data['middle_name'],
                     $registration_data['last_name'],
                     $registration_data['email'],
                     $registration_data['contact_number'],
+                    $birthday_formatted,
                     $registration_data['password'],
                     $registration_data['verification_code'],
                     $registration_data['bank_id'],

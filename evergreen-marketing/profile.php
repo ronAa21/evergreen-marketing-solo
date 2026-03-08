@@ -31,32 +31,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Validate email
     if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error_message = "Invalid email format.";
-    } else {
-        // Update profile
-        $sql = "UPDATE bank_customers SET 
-                contact_number = ?, 
-                email = ?, 
-                address = ?, 
-                city_province = ? 
-                WHERE customer_id = ?";
+        $error_message = "Invalid email format. Please enter a valid email address.";
+    }
+    // Validate contact number (Philippine mobile format: 09XXXXXXXXX)
+    elseif (!empty($contact_number) && !preg_match('/^09[0-9]{9}$/', $contact_number)) {
+        $error_message = "Invalid contact number. Please use Philippine mobile format (09XXXXXXXXX).";
+    }
+    // Validate address length
+    elseif (!empty($address) && (strlen($address) < 5 || strlen($address) > 200)) {
+        $error_message = "Address must be between 5 and 200 characters.";
+    }
+    // Validate city/province length
+    elseif (!empty($city_province) && (strlen($city_province) < 3 || strlen($city_province) > 100)) {
+        $error_message = "City/Province must be between 3 and 100 characters.";
+    }
+    else {
+        $conn->begin_transaction();
         
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssi", $contact_number, $email, $address, $city_province, $user_id);
-        
-        if ($stmt->execute()) {
+        try {
+            // Update bank_customers table
+            $sql = "UPDATE bank_customers SET 
+                    contact_number = ?, 
+                    email = ?
+                    WHERE customer_id = ?";
+            
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssi", $contact_number, $email, $user_id);
+            $stmt->execute();
+            $stmt->close();
+            
+            // Check if addresses table exists and update/insert address
+            $check_table = $conn->query("SHOW TABLES LIKE 'addresses'");
+            if ($check_table->num_rows > 0) {
+                // Check if user has an address record
+                $sql = "SELECT address_id FROM addresses WHERE customer_id = ? AND is_primary = 1";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    // Update existing address
+                    $sql = "UPDATE addresses SET address_line = ? WHERE customer_id = ? AND is_primary = 1";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("si", $address, $user_id);
+                    $stmt->execute();
+                } else {
+                    // Insert new address
+                    $sql = "INSERT INTO addresses (customer_id, address_line, is_primary) VALUES (?, ?, 1)";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("is", $user_id, $address);
+                    $stmt->execute();
+                }
+                $stmt->close();
+            } else {
+                // Fallback: update bank_customers if addresses table doesn't exist
+                $sql = "UPDATE bank_customers SET address = ?, city_province = ? WHERE customer_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ssi", $address, $city_province, $user_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+            
+            $conn->commit();
             $success_message = "Profile updated successfully!";
             $_SESSION['email'] = $email; // Update session email
-        } else {
+            
+        } catch (Exception $e) {
+            $conn->rollback();
             $error_message = "Failed to update profile. Please try again.";
         }
-        $stmt->close();
     }
 }
 
-// Fetch user profile data
+// Fetch user profile data with address information
 $user_id = $_SESSION['user_id'];
-$sql = "SELECT * FROM bank_customers WHERE customer_id = ?";
+
+// Try to get data from bank_customers with LEFT JOIN to addresses table
+$sql = "SELECT 
+            bc.*,
+            a.address_line,
+            p.province_name,
+            c.city_name,
+            b.barangay_name
+        FROM bank_customers bc
+        LEFT JOIN addresses a ON bc.customer_id = a.customer_id AND a.is_primary = 1
+        LEFT JOIN provinces p ON a.province_id = p.province_id
+        LEFT JOIN cities c ON a.city_id = c.city_id
+        LEFT JOIN barangays b ON a.barangay_id = b.barangay_id
+        WHERE bc.customer_id = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
@@ -68,8 +131,23 @@ $stmt->close();
 $full_name = trim(($profile['first_name'] ?? '') . ' ' . ($profile['middle_name'] ?? '') . ' ' . ($profile['last_name'] ?? ''));
 $email = $profile['email'] ?? 'N/A';
 $contact_number = $profile['contact_number'] ?? 'N/A';
-$address = $profile['address'] ?? 'N/A';
-$city_province = $profile['city_province'] ?? 'N/A';
+
+// Try to get address from addresses table first, fallback to bank_customers columns
+$address = 'N/A';
+if (!empty($profile['address_line'])) {
+    $address = $profile['address_line'];
+} elseif (!empty($profile['address'])) {
+    $address = $profile['address'];
+}
+
+// Build city/province from location tables or fallback to bank_customers column
+$city_province = 'N/A';
+if (!empty($profile['city_name']) && !empty($profile['province_name'])) {
+    $city_province = $profile['city_name'] . ', ' . $profile['province_name'];
+} elseif (!empty($profile['city_province'])) {
+    $city_province = $profile['city_province'];
+}
+
 $birthday = $profile['birthday'] ?? 'N/A';
 if ($birthday !== 'N/A' && $birthday !== null) {
     $birthday = date('F j, Y', strtotime($birthday));
@@ -78,6 +156,21 @@ $bank_id = $profile['bank_id'] ?? '0';
 $referral_code = $profile['referral_code'] ?? 'N/A';
 $total_points = number_format($profile['total_points'] ?? 0, 2);
 $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
+
+// Fetch card applications for this user
+$card_apps_sql = "SELECT application_id, card_type, application_date, status, reviewed_at 
+                  FROM card_applications 
+                  WHERE customer_id = ? 
+                  ORDER BY application_date DESC";
+$card_stmt = $conn->prepare($card_apps_sql);
+$card_stmt->bind_param("i", $user_id);
+$card_stmt->execute();
+$card_result = $card_stmt->get_result();
+$card_applications = [];
+while ($row = $card_result->fetch_assoc()) {
+    $card_applications[] = $row;
+}
+$card_stmt->close();
 ?>
 
 <!DOCTYPE html>
@@ -656,7 +749,13 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
                         <div class="info-item edit-field-group view-mode" data-field="email">
                             <span class="info-label">Email Address</span>
                             <div class="info-value"><?= htmlspecialchars($email) ?></div>
-                            <input type="email" name="email" class="edit-input" value="<?= htmlspecialchars($email) ?>" required>
+                            <input type="email" 
+                                   name="email" 
+                                   class="edit-input" 
+                                   value="<?= htmlspecialchars($email) ?>" 
+                                   required
+                                   pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                                   title="Please enter a valid email address">
                             <div class="edit-btn-container">
                                 <button type="button" class="btn-edit" onclick="toggleEdit(this)">
                                     <i class="fas fa-edit"></i> Edit Email
@@ -667,7 +766,15 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
                         <div class="info-item edit-field-group view-mode" data-field="contact_number">
                             <span class="info-label">Contact Number</span>
                             <div class="info-value"><?= htmlspecialchars($contact_number) ?></div>
-                            <input type="text" name="contact_number" class="edit-input" value="<?= htmlspecialchars($contact_number) ?>" placeholder="09XX XXX XXXX">
+                            <input type="tel" 
+                                   name="contact_number" 
+                                   class="edit-input" 
+                                   value="<?= htmlspecialchars($contact_number) ?>" 
+                                   placeholder="09171234567"
+                                   pattern="09[0-9]{9}"
+                                   maxlength="11"
+                                   title="Please enter a valid Philippine mobile number (09XXXXXXXXX)"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             <div class="edit-btn-container">
                                 <button type="button" class="btn-edit" onclick="toggleEdit(this)">
                                     <i class="fas fa-edit"></i> Edit Number
@@ -678,7 +785,15 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
                         <div class="info-item edit-field-group view-mode" data-field="address">
                             <span class="info-label">Address</span>
                             <div class="info-value"><?= htmlspecialchars($address) ?></div>
-                            <input type="text" name="address" class="edit-input" value="<?= htmlspecialchars($address) ?>" placeholder="Street, Barangay">
+                            <input type="text" 
+                                   name="address" 
+                                   class="edit-input" 
+                                   value="<?= htmlspecialchars($address) ?>" 
+                                   placeholder="Street, Barangay"
+                                   minlength="5"
+                                   maxlength="200"
+                                   required
+                                   title="Please enter your complete address">
                             <div class="edit-btn-container">
                                 <button type="button" class="btn-edit" onclick="toggleEdit(this)">
                                     <i class="fas fa-edit"></i> Edit Address
@@ -689,7 +804,15 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
                         <div class="info-item edit-field-group view-mode" data-field="city_province">
                             <span class="info-label">City/Province</span>
                             <div class="info-value"><?= htmlspecialchars($city_province) ?></div>
-                            <input type="text" name="city_province" class="edit-input" value="<?= htmlspecialchars($city_province) ?>" placeholder="City, Province">
+                            <input type="text" 
+                                   name="city_province" 
+                                   class="edit-input" 
+                                   value="<?= htmlspecialchars($city_province) ?>" 
+                                   placeholder="City, Province"
+                                   minlength="3"
+                                   maxlength="100"
+                                   required
+                                   title="Please enter your city and province">
                             <div class="edit-btn-container">
                                 <button type="button" class="btn-edit" onclick="toggleEdit(this)">
                                     <i class="fas fa-edit"></i> Edit City
@@ -706,7 +829,224 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
                 </div>
             </div>
         </form>
+
+        <!-- Card Application Status Section -->
+        <div class="profile-card">
+            <div class="card-header">
+                <i class="fas fa-credit-card"></i>
+                <h2>Card Application Status</h2>
+            </div>
+            <div class="card-body">
+                <?php if (count($card_applications) > 0): ?>
+                    <div class="card-applications-list">
+                        <?php foreach ($card_applications as $app): ?>
+                            <div class="application-item">
+                                <div class="application-header">
+                                    <div class="card-type-info">
+                                        <i class="fas fa-credit-card" style="color: #F1B24A;"></i>
+                                        <span class="card-type-name"><?= htmlspecialchars(ucfirst($app['card_type'])) ?> Card</span>
+                                    </div>
+                                    <span class="status-badge status-<?= $app['status'] ?>">
+                                        <?= htmlspecialchars(ucfirst($app['status'])) ?>
+                                    </span>
+                                </div>
+                                <div class="application-details">
+                                    <div class="detail-item">
+                                        <i class="fas fa-calendar"></i>
+                                        <span>Applied: <?= date('M d, Y', strtotime($app['application_date'])) ?></span>
+                                    </div>
+                                    <?php if ($app['reviewed_at']): ?>
+                                        <div class="detail-item">
+                                            <i class="fas fa-check-circle"></i>
+                                            <span>Reviewed: <?= date('M d, Y', strtotime($app['reviewed_at'])) ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($app['status'] === 'pending'): ?>
+                                    <div class="application-message pending-message">
+                                        <i class="fas fa-clock"></i>
+                                        Your application is being reviewed. We'll notify you once a decision is made.
+                                    </div>
+                                <?php elseif ($app['status'] === 'approved'): ?>
+                                    <div class="application-message success-message">
+                                        <i class="fas fa-check-circle"></i>
+                                        Congratulations! Your card application has been approved. Your card will be delivered soon.
+                                    </div>
+                                <?php elseif ($app['status'] === 'declined'): ?>
+                                    <div class="application-message error-message">
+                                        <i class="fas fa-times-circle"></i>
+                                        Unfortunately, your application was not approved at this time. You may reapply after 30 days.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="no-applications-message">
+                        <i class="fas fa-inbox" style="font-size: 3rem; color: rgba(255,255,255,0.3); margin-bottom: 1rem;"></i>
+                        <h3 style="color: rgba(255,255,255,0.8); margin-bottom: 0.5rem;">No Card Applications Yet</h3>
+                        <p style="color: rgba(255,255,255,0.5); margin-bottom: 1.5rem;">You haven't applied for any cards yet.</p>
+                        <a href="cards/credit.php" class="btn-apply-card">
+                            <i class="fas fa-plus-circle"></i> Apply for a Card
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
+
+    <style>
+        /* Card Application Status Styles */
+        .card-applications-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .application-item {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .application-item:hover {
+            background: rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .application-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card-type-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card-type-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending {
+            background: rgba(241, 178, 74, 0.2);
+            color: #F1B24A;
+            border: 1px solid #F1B24A;
+        }
+
+        .status-approved {
+            background: rgba(40, 167, 69, 0.2);
+            color: #5dff8f;
+            border: 1px solid #5dff8f;
+        }
+
+        .status-declined {
+            background: rgba(220, 53, 69, 0.2);
+            color: #ff6b7a;
+            border: 1px solid #ff6b7a;
+        }
+
+        .application-details {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .detail-item i {
+            color: #F1B24A;
+        }
+
+        .application-message {
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .pending-message {
+            background: rgba(241, 178, 74, 0.1);
+            border: 1px solid rgba(241, 178, 74, 0.3);
+            color: #F1B24A;
+        }
+
+        .success-message {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: #5dff8f;
+        }
+
+        .error-message {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #ff6b7a;
+        }
+
+        .no-applications-message {
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+
+        .btn-apply-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #F1B24A;
+            color: #003631;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-apply-card:hover {
+            background: #e69610;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(241, 178, 74, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .application-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .application-details {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+        }
+    </style>
 
     <script>
         function toggleEdit(button) {

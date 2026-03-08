@@ -242,6 +242,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $applicationId = $stmt->insert_id;
         $stmt->close();
         
+        // ========================================
+        // CREATE INDIVIDUAL CARD APPLICATIONS
+        // ========================================
+        // If user selected cards, create individual card application records
+        if (!empty($selectedCards)) {
+            $cardsArray = is_array($data['selectedCards']) ? $data['selectedCards'] : explode(',', $selectedCards);
+            
+            foreach ($cardsArray as $cardType) {
+                $cardType = trim($cardType);
+                if (!empty($cardType)) {
+                    $cardSql = "INSERT INTO card_applications (customer_id, card_type, application_date, status) 
+                                VALUES (?, ?, NOW(), 'pending')";
+                    $cardStmt = $conn->prepare($cardSql);
+                    $cardStmt->bind_param("is", $customer_id, $cardType);
+                    
+                    if ($cardStmt->execute()) {
+                        error_log("Card application created: " . $cardType . " for customer " . $customer_id);
+                    } else {
+                        error_log("Failed to create card application: " . $cardStmt->error);
+                    }
+                    $cardStmt->close();
+                }
+            }
+        }
+        
         // Handle ID image uploads AFTER getting application_id (matching account-opening.js structure)
         // Use the same upload directory as Basic-operation
         $uploadDir = '../Basic-operation/uploads/id_images/';
