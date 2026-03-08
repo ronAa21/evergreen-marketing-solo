@@ -1162,7 +1162,7 @@
                 <h4>Contact Us</h4>
                 <div class="contact-item">📞 <?php echo htmlspecialchars(get_contact_phone()); ?></div>
                 <div class="contact-item">✉️ <?php echo htmlspecialchars(get_contact_email()); ?></div>
-                <div class="contact-item">📍 123 Financial District, Suite 500<br>&nbsp;&nbsp;&nbsp;&nbsp;New York, NY 10004</div>
+                <div class="contact-item">📍 673 Quirino Highway, San Bartolome, Novaliches, Quezon City, 1116 Philippines.</div>
             </div>
         </div>
         
