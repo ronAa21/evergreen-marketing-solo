@@ -4,6 +4,9 @@
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
     ]);
+
+    // Include content helper for dynamic content
+    include_once(__DIR__ . '/includes/content_helper.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -468,11 +471,11 @@
 <body>
   <div class="site-top" aria-hidden="false">
     <a href="viewingpage.php">
-      <img src="images/icon.png" alt="Evergreen logo">
+      <img src="<?php echo htmlspecialchars(get_company_logo()); ?>" alt="<?php echo htmlspecialchars(get_company_name()); ?> logo">
     </a>
     <div>
       <div class="brand">
-        <a href="viewingpage.php">EVERGREEN</a>
+        <a href="viewingpage.php"><?php echo htmlspecialchars(strtoupper(get_company_name())); ?></a>
       </div>
       <div class="motto">
         <a href="viewingpage.php">Secure. Invest. Achieve</a></div>

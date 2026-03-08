@@ -13,6 +13,9 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['email'])) {
 
 include("db_connect.php");
 
+// Include content helper for dynamic content
+include_once(__DIR__ . '/includes/content_helper.php');
+
 $success_message = '';
 $error_message = '';
 
@@ -532,9 +535,9 @@ $member_since = date('F j, Y', strtotime($profile['created_at'] ?? 'now'));
     <nav>
         <a href="viewingpage.php" class="logo">
             <div class="logo-icon">
-                <img src="images/Logo.png" alt="Evergreen Logo">
+                <img src="<?php echo htmlspecialchars(get_company_logo()); ?>" alt="<?php echo htmlspecialchars(get_company_name()); ?> Logo">
             </div>
-            <span>EVERGREEN</span>
+            <span><?php echo htmlspecialchars(get_company_name()); ?></span>
         </a>
 
         <div class="nav-links">

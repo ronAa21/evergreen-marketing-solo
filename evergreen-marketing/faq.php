@@ -4,6 +4,9 @@
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
     ]);
+
+    // Include content helper for dynamic content
+    include_once(__DIR__ . '/includes/content_helper.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -452,7 +455,7 @@
       </a>
     <div>
       <div class="brand">
-        <a href="viewingpage.php">EVERGREEN</a>
+        <a href="viewingpage.php"><?php echo htmlspecialchars(get_company_name()); ?></a>
       </div>
       <div class="motto">
         <a href="viewingpage.php">Secure, Invest, Achieve</a></div>
@@ -490,7 +493,7 @@
             <span>How do I contact customer support for loan inquiries?</span>
             <button class="faq-toggle" aria-expanded="false">v</button>
           </div>
-          <div class="faq-a">You can call our support line at 1-800-EVERGREEN or email loans@evergreenbank.com. Support is available Monday–Friday, 8am–6pm.</div>
+          <div class="faq-a">You can call our support line at <?php echo htmlspecialchars(get_contact_phone()); ?> or email loans@evergreenbank.com. Support is available Monday–Friday, 8am–6pm.</div>
         </li>
 
         <li class="faq-item">

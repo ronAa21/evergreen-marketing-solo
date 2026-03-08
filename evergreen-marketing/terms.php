@@ -4,6 +4,9 @@
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
     ]);
+
+    // Include content helper for dynamic content
+    include_once(__DIR__ . '/includes/content_helper.php');
 ?>
 
 <!DOCTYPE html>
@@ -407,7 +410,7 @@
     </a>
     <div class="nav-wrap">
       <h2 class="web-title">
-        <a href="viewingpage.php">EVERGREEN</a></h2>
+        <a href="viewingpage.php"><?php echo htmlspecialchars(strtoupper(get_company_name())); ?></a></h2>
       <p class="motto">
         <a href="viewingpage.php">Secure, Invest, Achieve</a></p>
     </div>

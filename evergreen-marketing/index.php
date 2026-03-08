@@ -1,5 +1,8 @@
 <?php
     session_start();
+    
+    // Load dynamic content helper
+    include('includes/content_helper.php');
 
     // test commit 10-11-2025;
 ?>

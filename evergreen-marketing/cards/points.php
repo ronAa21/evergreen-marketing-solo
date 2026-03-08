@@ -1503,7 +1503,7 @@
                 </div>
 
                 <div id="profileDropdown" class="profile-dropdown" role="menu" aria-labelledby="profileBtn">
-                    <a href="profile.php" role="menuitem">Profile</a>
+                    <a href="../profile.php" role="menuitem">Profile</a>
                     <a href="../cards/points.php" role="menuitem">Missions</a>
                     <a href="viewing.php" role="menuitem" onclick="showSignOutModal(event)">Sign Out</a>
                 </div>

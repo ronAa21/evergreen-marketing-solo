@@ -12,6 +12,9 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['email'])) {
 
 // Get user info from session
 $fullName = $_SESSION['full_name'] ?? ($_SESSION['first_name'] . ' ' . $_SESSION['last_name']);
+
+// Include content helper for dynamic content
+include_once(__DIR__ . '/includes/content_helper.php');
 ?>
 
 <!DOCTYPE html>
@@ -1016,11 +1019,11 @@ $fullName = $_SESSION['full_name'] ?? ($_SESSION['first_name'] . ' ' . $_SESSION
         <div class="logo">
             <div class="logo-icon">
                 <a href="viewingpage.php">
-                    <img src="images/Logo.png.png">
+                    <img src="<?php echo htmlspecialchars(get_company_logo()); ?>">
                 </a>
             </div>
             <span>
-                <a href="viewingpage.php">EVERGREEN</a>
+                <a href="viewingpage.php"><?php echo htmlspecialchars(get_company_name()); ?></a>
             </span>
         </div>
 
@@ -1071,7 +1074,7 @@ $fullName = $_SESSION['full_name'] ?? ($_SESSION['first_name'] . ' ' . $_SESSION
                 
                 <h1 class="hero-title">
                     WELCOME TO<br>
-                    <span>EVERGREEN</span>
+                    <span><?php echo htmlspecialchars(get_company_name()); ?></span>
                 </h1>
                 
                 <div class="hero-features">
@@ -1298,8 +1301,8 @@ $fullName = $_SESSION['full_name'] ?? ($_SESSION['first_name'] . ' ' . $_SESSION
             
             <div class="footer-section">
                 <h4>Contact Us</h4>
-                <div class="contact-item">📞 1-800-EVERGREEN</div>
-                <div class="contact-item">✉️ evrgrn.64@gmail.com</div>
+                <div class="contact-item">📞 <?php echo htmlspecialchars(get_contact_phone()); ?></div>
+                <div class="contact-item">✉️ <?php echo htmlspecialchars(get_contact_email()); ?></div>
                 <div class="contact-item">📍 123 Financial District, Suite 500<br>&nbsp;&nbsp;&nbsp;&nbsp;New York, NY 10004</div>
             </div>
         </div>
