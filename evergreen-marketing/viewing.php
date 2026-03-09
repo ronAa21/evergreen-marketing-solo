@@ -4,6 +4,9 @@
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
     ]);
+    
+    // Include content helper for dynamic content
+    include_once(__DIR__ . '/includes/content_helper.php');
 ?>
 
 <!DOCTYPE html>
@@ -1327,12 +1330,12 @@
         <div class="logo">
             <div class="logo-icon">
                 <a href="viewing.php">
-                    <img src="images/Logo.png.png">
+                    <img src="<?php echo htmlspecialchars(get_company_logo()); ?>">
                 </a>
             </div>
                 <span>
                     <a href="viewing.php">
-                    EVERGREEN
+                    <?php echo htmlspecialchars(strtoupper(get_company_name())); ?>
                     </a>
                 </span>
         </div>
@@ -1347,8 +1350,8 @@
     <!-- Hero Section -->
     <section class="hero">
         <div class="hero-content">
-            <h1>Banking that grows <br>with <span class="highlight">you</span></br></h1>
-            <p>Secure financial solutions for every stage of your life journey.<br> Invest, save, and achieve your goals with Evergreen.</p>
+            <h1><?php echo htmlspecialchars(get_hero_title()); ?></h1>
+            <p><?php echo htmlspecialchars(get_hero_paragraph()); ?></p>
             <div class="hero-buttons">
                 <a href="login.php" class="btn btn-primary">Open an Account</a>
                 <a href="learnmoreno.php" class="btn btn-secondary">Learn More</a>
@@ -1356,41 +1359,41 @@
         </div>
         <div class="hero-card">
     <div class="hero-image">
-        <img src="images/hero-image.png" alt="Hero Image">
+        <img src="<?php echo htmlspecialchars(get_hero_card_image()); ?>" alt="Hero Image">
     </div>
-    <h3>Banking at your fingertips</h3>
-    <p>Experience our award-winning digital banking platform designed for your<br>convenience.</p>
+    <h3><?php echo htmlspecialchars(get_hero_card_title()); ?></h3>
+    <p><?php echo htmlspecialchars(get_hero_card_description()); ?></p>
 </div>
     </section>
 
     <!-- Financial Solutions Section -->
     <section class="solutions">
-        <h2>Financial Solutions for Every Need</h2>
-        <p class="solutions-intro">Discover our comprehensive range of banking products designed to support your financial journey.</p>
+        <h2><?php echo htmlspecialchars(get_solutions_title()); ?></h2>
+        <p class="solutions-intro"><?php echo htmlspecialchars(get_solutions_intro()); ?></p>
         
         <div class="solutions-grid">
             <div class="solution-card">
-                <div class="solution-icon">💳</div>
-                <h3>Everyday Banking</h3>
-                <p>Fee-free checking accounts with <br>premium benefits and rewards on<br> everyday spending.</p>
+                <div class="solution-icon"><?php echo htmlspecialchars(get_solution_1_icon()); ?></div>
+                <h3><?php echo htmlspecialchars(get_solution_1_title()); ?></h3>
+                <p><?php echo htmlspecialchars(get_solution_1_description()); ?></p>
             </div>
             
             <div class="solution-card">
-                <div class="solution-icon">🏦</div>
-                <h3>Savings & Deposits</h3>
-                <p>High-yield savings accounts and<br> CDs to help your money grow<br> faster.</p>
+                <div class="solution-icon"><?php echo htmlspecialchars(get_solution_2_icon()); ?></div>
+                <h3><?php echo htmlspecialchars(get_solution_2_title()); ?></h3>
+                <p><?php echo htmlspecialchars(get_solution_2_description()); ?></p>
             </div>
             
             <div class="solution-card">
-                <div class="solution-icon">📈</div>
-                <h3>Investments</h3>
-                <p>Personalized investment strategies aligned with your financial goals.</p>
+                <div class="solution-icon"><?php echo htmlspecialchars(get_solution_3_icon()); ?></div>
+                <h3><?php echo htmlspecialchars(get_solution_3_title()); ?></h3>
+                <p><?php echo htmlspecialchars(get_solution_3_description()); ?></p>
             </div>
             
             <a href="login.php?redirect=/Evergreen/LoanSubsystem/index.php" class="solution-card" style="text-decoration: none; color: inherit;">
-                <div class="solution-icon">🏠</div>
-                <h3>Home Loans</h3>
-                <p>Competitive mortgage rates and flexible repayment options for your dream home.</p>
+                <div class="solution-icon"><?php echo htmlspecialchars(get_solution_4_icon()); ?></div>
+                <h3><?php echo htmlspecialchars(get_solution_4_title()); ?></h3>
+                <p><?php echo htmlspecialchars(get_solution_4_description()); ?></p>
             </a>
         </div>
         
@@ -1400,61 +1403,61 @@
     <section class="rewards-section">
   <div class="rewards-container">
     <div class="rewards-text">
-      <h1>Get a Card<br>to get some<br><span>Awesome Rewards!</span></h1>
+      <h1><?php echo htmlspecialchars(get_rewards_title()); ?></h1>
       <p>
-        Open an account with us today and enjoy exclusive rewards, special offers, and member-only perks designed to make your banking more rewarding.
+        <?php echo htmlspecialchars(get_rewards_description()); ?>
       </p>
-      <a href="cardrewardsno.php" class="rewards-btn">Learn More</a>
+      <a href="cardrewardsno.php" class="rewards-btn"><?php echo htmlspecialchars(get_rewards_button_text()); ?></a>
     </div>
 
     <div class="rewards-image">
-      <img src="images/card.png" alt="Reward Card">
+      <img src="<?php echo htmlspecialchars(get_rewards_image()); ?>" alt="Reward Card">
     </div>
   </div>
 </section
 
     <!-- Loan Services Section -->
     <section class="loans">
-        <h2>LOAN SERVICES<br>WE OFFER</h2>
+        <h2><?php echo htmlspecialchars(get_loans_title()); ?></h2>
         
         <div class="loans-grid">
             <a href="login.php?redirect=/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Personal%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image">
-                    <img src="images/personalloan.png" alt="Personal Loan">
+                    <img src="<?php echo htmlspecialchars(get_loan_1_image()); ?>" alt="Personal Loan">
                 </div>
                 <div class="loan-content">
-                    <h3>Personal Loan</h3>
-                    <p>Stop worrying and bring your<br> plans to life.</p>
+                    <h3><?php echo htmlspecialchars(get_loan_1_title()); ?></h3>
+                    <p><?php echo htmlspecialchars(get_loan_1_description()); ?></p>
                 </div>
             </a>
             
             <a href="login.php?redirect=/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Car%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image2">
-                    <img src="images/autoloan.png" alt="Auto Loan">
+                    <img src="<?php echo htmlspecialchars(get_loan_2_image()); ?>" alt="Auto Loan">
                 </div>
                 <div class="loan-content">
-                    <h3>Auto Loan</h3>
-                    <p>Drive your new car with low rates and fast approval.</p>
+                    <h3><?php echo htmlspecialchars(get_loan_2_title()); ?></h3>
+                    <p><?php echo htmlspecialchars(get_loan_2_description()); ?></p>
                 </div>
             </a>
             
             <a href="login.php?redirect=/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Home%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image3">
-                    <img src="images/homeloan.png" alt="Home Loan">
+                    <img src="<?php echo htmlspecialchars(get_loan_3_image()); ?>" alt="Home Loan">
                 </div>
                 <div class="loan-content">
-                    <h3>Home Loan</h3>
-                    <p>Take the next step to your new home property to fund your various needs.</p>
+                    <h3><?php echo htmlspecialchars(get_loan_3_title()); ?></h3>
+                    <p><?php echo htmlspecialchars(get_loan_3_description()); ?></p>
                 </div>
             </a>
             
             <a href="login.php?redirect=/Evergreen/LoanSubsystem/Loan_AppForm.php?loanType=Multi-Purpose%20Loan" class="loan-card" style="text-decoration: none; color: inherit;">
                 <div class="loan-image4">
-                    <img src="images/multipurposeloan.png" alt="Multipurpose Loan">
+                    <img src="<?php echo htmlspecialchars(get_loan_4_image()); ?>" alt="Multipurpose Loan">
                 </div>
                 <div class="loan-content">
-                    <h3>Multipurpose Loan</h3>
-                    <p>Carry on with your plans. Use your property to fund your various needs.</p>
+                    <h3><?php echo htmlspecialchars(get_loan_4_title()); ?></h3>
+                    <p><?php echo htmlspecialchars(get_loan_4_description()); ?></p>
                 </div>
             </a>
         </div>
@@ -1464,32 +1467,26 @@
     <section class="career-section">
         <div class="container">
             <div class="content">
-                <h1>Build a Meaningful Career in the World of Banking!</h1>
+                <h1><?php echo htmlspecialchars(get_career_title()); ?></h1>
                 
                 <p class="intro">
-                    At Evergreen Bank, we believe that our employees are the heart of our success. We're looking 
-                    for dedicated, skilled, and passionate individuals who are ready to grow with us. Whether you're 
-                    an experienced banker or a fresh graduate eager to learn, we provide a supportive environment 
-                    where your talents can thrive and your career can flourish.
+                    <?php echo get_career_intro(); ?>
                 </p>
 
                 <div class="application-info">
-                    <h2>How to apply?</h2>
+                    <h2><?php echo htmlspecialchars(get_career_how_to_apply_title()); ?></h2>
                     <p>
-                        Interested applicants are encouraged to personally visit our branch to submit their application. 
-                        Please bring the following requirements and apply directly at Evergreen Bank's Human Resources 
-                        Department.
+                        <?php echo get_career_how_to_apply_text(); ?>
                     </p>
                 </div>
 
                 <div class="location">
-                    <strong>Where to Apply:</strong><br>
-                    Evergreen Bank Main Branch<br>
-                    123 Evergreen Avenue, City Center
+                    <strong><?php echo htmlspecialchars(get_career_location_title()); ?></strong><br>
+                    <?php echo get_career_location_address(); ?>
                 </div>
 
                 <div class="requirements">
-                    <h2>Requirements:</h2>
+                    <h2><?php echo htmlspecialchars(get_career_requirements_title()); ?></h2>
                     <ul>
                         <li>Updated Resume / Curriculum Vitae</li>
                         <li>Application Letter</li>
@@ -1499,15 +1496,14 @@
                 </div>
 
                 <div class="note">
-                    <strong>Note:</strong> Walk-in applicants are welcome. Our HR team will be glad to assist you with the next steps in your 
-                    application process.
+                    <strong>Note:</strong> <?php echo get_career_note(); ?>
                 </div>
             </div>
 
             <div class="image-container">
                 <div class="image-wrapper">
                     <div class="curved-image">
-                        <img src="images/recruit.png" alt="Professional woman in business suit shaking hands">
+                        <img src="<?php echo htmlspecialchars(get_career_image()); ?>" alt="Professional woman in business suit shaking hands">
                         <div class="decorative-dots">
                             <span></span><span></span><span></span><span></span><span></span>
                             <span></span><span></span><span></span><span></span><span></span>
@@ -1528,18 +1524,18 @@
             <div class="footer-brand">
                 <div class="logo">
                     <div class="logo-icon">
-                        <img src="images/icon.png">
+                        <img src="<?php echo htmlspecialchars(get_company_logo()); ?>">
                     </div>
                 </div>
-                <p>Secure. Invest. Achieve. Your trusted financial partner for a prosperous future.</p>
+                <p><?php echo htmlspecialchars(get_footer_tagline()); ?></p>
                 <div class="social-icons">
                     <div class="social-icon">
-                        <a href="https://www.facebook.com/profile.php?id=61582812214198">
+                        <a href="<?php echo htmlspecialchars(get_social_facebook_url()); ?>">
                             <img src="images/fb-trans.png" alt="facebook" class="contact-icon">
                         </a>
                     </div>
                     <div class="social-icon">
-                        <a href="https://www.instagram.com/evergreenbanking/">
+                        <a href="<?php echo htmlspecialchars(get_social_instagram_url()); ?>">
                             <img src="images/trans-ig.png" alt="instagram" class="contact-icon">
                         </a>
                     </div>
@@ -1568,14 +1564,14 @@
             
             <div class="footer-section">
                 <h4>Contact Us</h4>
-                <div class="contact-item">📞 1-800-EVERGREEN</div>
-                <div class="contact-item">✉️ evrgrn64@gmail.com</div>
-                <div class="contact-item">📍 123 Financial District, Suite 500<br>&nbsp;&nbsp;&nbsp;&nbsp;New York, NY 10004</div>
+                <div class="contact-item">📞 <?php echo htmlspecialchars(get_contact_phone()); ?></div>
+                <div class="contact-item">✉️ <?php echo htmlspecialchars(get_contact_email()); ?></div>
+                <div class="contact-item">📍 <?php echo get_footer_address(); ?></div>
             </div>
         </div>
         
         <div class="footer-bottom">
-            <p>© 2023 Evergreen Bank. All rights reserved.<br>Member FDIC. Equal Housing Lender. Evergreen Bank, N.A.</p>
+            <p><?php echo get_footer_copyright(); ?></p>
             <div class="footer-links">
                 <a href="policyno.php">Privacy Policy</a>
                 <a href="termsno.php">Terms and Agreements</a>
