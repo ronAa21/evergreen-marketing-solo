@@ -879,7 +879,7 @@
                 </div>
         </div>
 
-                     <a href="#loans">Loans</a>
+                     <a href="./Content-view/ads-view.php">What's new</a>
                      <a href="./about.php">About Us</a>
         </div>
 
@@ -895,7 +895,6 @@
 
                 <div id="profileDropdown" class="profile-dropdown" role="menu" aria-labelledby="profileBtn">
                     <a href="profile.php" role="menuitem">Profile</a>
-                    <a href="refer.php" role="menuitem">Refer to a friend</a>
                     <a href="./cards/points.php" role="menuitem">Missions</a>
                     <a href="viewing.php" role="menuitem" onclick="showSignOutModal(event)">Sign Out</a>
                 </div>

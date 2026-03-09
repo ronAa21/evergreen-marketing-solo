@@ -500,6 +500,10 @@ $current_page = $_GET['page'] ?? 'content';
                     <i class="fas fa-credit-card menu-icon"></i>
                     <span class="menu-text">Card Applications</span>
                 </a>
+                <a href="?page=ads" class="menu-item <?php echo $current_page === 'ads' ? 'active' : ''; ?>">
+                    <i class="fas fa-bullhorn menu-icon"></i>
+                    <span class="menu-text">Ads Management</span>
+                </a>
             </div>
 
             <div class="logout-section">
@@ -523,6 +527,8 @@ $current_page = $_GET['page'] ?? 'content';
                             echo 'Content Management';
                         } elseif ($current_page === 'applications') {
                             echo 'Card Applications';
+                        } elseif ($current_page === 'ads') {
+                            echo 'Ads Management';
                         } else {
                             echo 'Dashboard';
                         }
@@ -565,6 +571,11 @@ $current_page = $_GET['page'] ?? 'content';
             <!-- Card Applications Section -->
             <div class="content-section <?php echo $current_page === 'applications' ? 'active' : ''; ?>">
                 <?php include('admin_card_applications.php'); ?>
+            </div>
+
+            <!-- Ads Management Section -->
+            <div class="content-section <?php echo $current_page === 'ads' ? 'active' : ''; ?>">
+                <?php include('admin_ads_management.php'); ?>
             </div>
         </div>
     </div>

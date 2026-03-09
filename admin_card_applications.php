@@ -96,7 +96,7 @@ $stats = $stats_result->fetch_assoc();
 ?>
 
 <div class="content-header">
-    <h1>Card Applications</h1>
+    <h1>Pending Applications</h1>
     <p>Review and manage customer card applications</p>
 </div>
 
@@ -293,6 +293,11 @@ $stats = $stats_result->fetch_assoc();
     .no-applications-icon {
         font-size: 48px;
         margin-bottom: 15px;
+    }
+
+    /* Manual Css */
+    .content-header {
+        padding: 10px;
     }
 
     @media (max-width: 768px) {

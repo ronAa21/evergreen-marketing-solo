@@ -780,7 +780,7 @@
             </div>
 
             <!-- REPLACED: LOANS WITH WHAT'S NEW -->
-            <a href="Content-view/index.php">What's new</a>
+            <a href="Content-view/ads-view.php">What's new</a>
             <a href="about.php">About Us</a>
         </div>
 
