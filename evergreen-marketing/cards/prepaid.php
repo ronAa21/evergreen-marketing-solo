@@ -965,7 +965,8 @@
             </div>
 
             <!-- replaced: loans -->
-            <a href="../Content-view/index.php">What's new</a>
+            <a href="../Content-view/ads-view.php">What's new</a>
+            <a href="#">Loans</a>
             <a href="../about.php">About Us</a>
         </div>
 
@@ -1181,7 +1182,7 @@
                 <h4>Contact Us</h4>
                 <div class="contact-item">📞 <?php echo htmlspecialchars(get_contact_phone()); ?></div>
                 <div class="contact-item">✉️ <?php echo htmlspecialchars(get_contact_email()); ?></div>
-                <div class="contact-item">📍 673 Quirino Highway, San Bartolome, Novaliches, Quezon City, 1116 Philippines.</div>
+                <div class="contact-item">📍 123 Financial District, Suite 500<br>&nbsp;&nbsp;&nbsp;&nbsp;New York, NY 10004</div>
             </div>
         </div>
         

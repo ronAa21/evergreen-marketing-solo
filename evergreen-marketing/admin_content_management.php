@@ -40,8 +40,8 @@ while ($row = $result->fetch_assoc()) {
 ?>
 
 <div class="content-header">
-    <h1>Content Management</h1>
-    <p>Manage your website content, company information, and marketing materials</p>
+    <h1>Manage Website Content</h1>
+    <p>Manage website content, company information, and marketing materials</p>
 </div>
 
 <?php if ($message): ?>
@@ -150,10 +150,7 @@ while ($row = $result->fetch_assoc()) {
                 <input type="hidden" name="content_key" value="<?php echo htmlspecialchars($item['content_key']); ?>">
                 
                 <div class="form-group">
-                    <label for="<?php echo $item['content_key']; ?>">
-                        <?php echo ucwords(str_replace('_', ' ', $item['content_key'])); ?>
-                    </label>
-                    
+    
                     <?php if ($item['content_type'] === 'html' || strlen($item['content_value']) > 100): ?>
                         <textarea 
                             id="<?php echo $item['content_key']; ?>" 

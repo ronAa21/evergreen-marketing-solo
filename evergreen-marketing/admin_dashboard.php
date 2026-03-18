@@ -1,6 +1,15 @@
 <?php
 session_start();
 
+// Prevent caching - force browser to always get fresh content
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Expires: 0");
+
+// Set timezone to Philippines
+date_default_timezone_set('Asia/Manila');
+
 // Check if admin is logged in
 if (!isset($_SESSION['admin_id'])) {
     header("Location: admin_login.php");
@@ -8,14 +17,16 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 $admin_name = $_SESSION['admin_name'] ?? 'Administrator';
-$current_page = $_GET['page'] ?? 'content';
+$current_page = $_GET['page'] ?? 'dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <meta name="theme-color" content="#003631">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Admin Dashboard - Evergreen Bank</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -364,338 +375,59 @@ $current_page = $_GET['page'] ?? 'content';
             top: 20px;
             left: 20px;
             z-index: 1001;
-            background: linear-gradient(135deg, #003631 0%, #005a50 100%);
+            background: #003631;
             color: white;
             border: none;
             width: 45px;
             height: 45px;
             border-radius: 12px;
             cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0, 54, 49, 0.3);
-            transition: all 0.3s ease;
-            font-size: 18px;
-        }
-
-        .mobile-menu-toggle:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(0, 54, 49, 0.4);
-        }
-
-        .mobile-menu-toggle:active {
-            transform: scale(0.95);
-        }
-
-        .mobile-menu-toggle i {
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar.mobile-open ~ .mobile-menu-toggle i {
-            transform: rotate(90deg);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         /* Responsive Design */
-        
-        /* Tablet Landscape (1024px and below) */
         @media (max-width: 1024px) {
-            .sidebar {
-                width: 260px;
-            }
-
             .main-content {
-                margin-left: 260px;
                 padding: 25px 30px;
-            }
-
-            .top-bar {
-                padding: 18px 25px;
-            }
-
-            .page-title-section h1 {
-                font-size: 24px;
-            }
-
-            .breadcrumb {
-                font-size: 12px;
-            }
-        }
-
-        /* Tablet Portrait (768px and below) */
-        @media (max-width: 768px) {
-            .mobile-menu-toggle {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .sidebar {
-                width: 280px;
-                transform: translateX(-100%);
-                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 4px 0 30px rgba(0, 0, 0, 0.2);
-            }
-
-            .sidebar.mobile-open {
-                transform: translateX(0);
-            }
-
-            /* Overlay when sidebar is open */
-            .sidebar.mobile-open::after {
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 280px;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: -1;
-            }
-
-            .main-content {
-                margin-left: 0;
-                padding: 90px 20px 20px;
-                width: 100%;
             }
 
             .top-bar {
                 flex-direction: column;
                 gap: 15px;
                 align-items: flex-start;
-                padding: 16px 20px;
-            }
-
-            .page-title-section h1 {
-                font-size: 22px;
             }
 
             .top-bar-actions {
                 width: 100%;
                 justify-content: space-between;
             }
+        }
 
-            .time-display {
-                font-size: 12px;
-                padding: 8px 14px;
+        @media (max-width: 768px) {
+            .mobile-menu-toggle {
+                display: block;
             }
 
-            .admin-avatar {
-                width: 38px;
-                height: 38px;
-                font-size: 14px;
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 80px 20px 20px;
             }
 
             .logout-section {
                 position: relative;
-                padding: 20px;
-            }
-
-            .sidebar-header {
-                padding: 25px 20px;
-            }
-
-            .logo-icon {
-                width: 40px;
-                height: 40px;
-                font-size: 20px;
-            }
-
-            .sidebar-header h2 {
-                font-size: 20px;
-            }
-
-            .menu-item {
-                padding: 12px 20px;
-                font-size: 14px;
-            }
-
-            .menu-icon {
-                font-size: 16px;
-            }
-        }
-
-        /* Mobile (480px and below) */
-        @media (max-width: 480px) {
-            .mobile-menu-toggle {
-                width: 42px;
-                height: 42px;
-                top: 15px;
-                left: 15px;
-            }
-
-            .sidebar {
-                width: 260px;
-            }
-
-            .sidebar.mobile-open::after {
-                left: 260px;
-            }
-
-            .main-content {
-                padding: 75px 15px 15px;
-            }
-
-            .top-bar {
-                padding: 14px 16px;
-                border-radius: 12px;
-            }
-
-            .page-title-section h1 {
-                font-size: 20px;
-            }
-
-            .breadcrumb {
-                font-size: 11px;
             }
 
             .time-display {
                 display: none;
-            }
-
-            .admin-avatar {
-                width: 36px;
-                height: 36px;
-                font-size: 13px;
-                border: 2px solid white;
-            }
-
-            .sidebar-header {
-                padding: 20px 16px;
-            }
-
-            .logo-icon {
-                width: 38px;
-                height: 38px;
-                font-size: 18px;
-            }
-
-            .sidebar-header h2 {
-                font-size: 18px;
-            }
-
-            .admin-badge {
-                font-size: 11px;
-                padding: 5px 10px;
-            }
-
-            .menu-section-title {
-                padding: 0 20px 10px;
-                font-size: 10px;
-            }
-
-            .menu-item {
-                padding: 11px 16px;
-                gap: 12px;
-            }
-
-            .menu-icon {
-                font-size: 15px;
-                width: 20px;
-            }
-
-            .menu-text {
-                font-size: 13px;
-            }
-
-            .logout-section {
-                padding: 16px;
-            }
-
-            .logout-btn {
-                padding: 12px;
-                font-size: 13px;
-            }
-
-            .message {
-                padding: 12px 16px;
-                font-size: 13px;
-            }
-        }
-
-        /* Extra Small Mobile (360px and below) */
-        @media (max-width: 360px) {
-            .sidebar {
-                width: 240px;
-            }
-
-            .sidebar.mobile-open::after {
-                left: 240px;
-            }
-
-            .mobile-menu-toggle {
-                width: 40px;
-                height: 40px;
-            }
-
-            .main-content {
-                padding: 70px 12px 12px;
-            }
-
-            .top-bar {
-                padding: 12px 14px;
-            }
-
-            .page-title-section h1 {
-                font-size: 18px;
-            }
-
-            .breadcrumb {
-                font-size: 10px;
-            }
-
-            .sidebar-header h2 {
-                font-size: 16px;
-            }
-
-            .logo-icon {
-                width: 35px;
-                height: 35px;
-            }
-
-            .menu-item {
-                padding: 10px 14px;
-            }
-
-            .menu-text {
-                font-size: 12px;
-            }
-        }
-
-        /* Landscape Mobile */
-        @media (max-width: 768px) and (orientation: landscape) {
-            .main-content {
-                padding: 75px 20px 20px;
-            }
-
-            .sidebar {
-                width: 260px;
-            }
-
-            .sidebar-header {
-                padding: 20px;
-            }
-
-            .logout-section {
-                position: relative;
-                padding: 16px;
-            }
-        }
-
-        /* Desktop Large (1440px and above) */
-        @media (min-width: 1440px) {
-            .sidebar {
-                width: 300px;
-            }
-
-            .main-content {
-                margin-left: 300px;
-                padding: 40px 50px;
-            }
-
-            .page-title-section h1 {
-                font-size: 32px;
-            }
-
-            .top-bar {
-                padding: 25px 35px;
             }
         }
 
@@ -760,6 +492,10 @@ $current_page = $_GET['page'] ?? 'content';
 
             <div class="sidebar-menu">
                 <div class="menu-section-title">Main Menu</div>
+                <a href="?page=dashboard" class="menu-item <?php echo $current_page === 'dashboard' ? 'active' : ''; ?>">
+                    <i class="fas fa-chart-line menu-icon"></i>
+                    <span class="menu-text">Dashboard</span>
+                </a>
                 <a href="?page=content" class="menu-item <?php echo $current_page === 'content' ? 'active' : ''; ?>">
                     <i class="fas fa-edit menu-icon"></i>
                     <span class="menu-text">Content Management</span>
@@ -767,6 +503,10 @@ $current_page = $_GET['page'] ?? 'content';
                 <a href="?page=applications" class="menu-item <?php echo $current_page === 'applications' ? 'active' : ''; ?>">
                     <i class="fas fa-credit-card menu-icon"></i>
                     <span class="menu-text">Card Applications</span>
+                </a>
+                <a href="?page=ads" class="menu-item <?php echo $current_page === 'ads' ? 'active' : ''; ?>">
+                    <i class="fas fa-bullhorn menu-icon"></i>
+                    <span class="menu-text">Ads Management</span>
                 </a>
             </div>
 
@@ -787,10 +527,14 @@ $current_page = $_GET['page'] ?? 'content';
                 <div class="page-title-section">
                     <h1>
                         <?php 
-                        if ($current_page === 'content') {
+                        if ($current_page === 'dashboard') {
+                            echo 'Dashboard Overview';
+                        } elseif ($current_page === 'content') {
                             echo 'Content Management';
                         } elseif ($current_page === 'applications') {
                             echo 'Card Applications';
+                        } elseif ($current_page === 'ads') {
+                            echo 'Ads Management';
                         } else {
                             echo 'Dashboard';
                         }
@@ -807,10 +551,27 @@ $current_page = $_GET['page'] ?? 'content';
                         <i class="far fa-clock"></i>
                         <span id="currentTime"></span>
                     </div>
-                    <div class="admin-avatar" title="<?php echo htmlspecialchars($admin_name); ?>">
-                        <?php echo strtoupper(substr($admin_name, 0, 1)); ?>
+                    <div class="admin-avatar" title="<?php 
+                        $current_day_full = date('l');
+                        echo $current_day_full; 
+                    ?>" id="dayAvatar">
+                        <?php 
+                            // Ensure timezone is set
+                            date_default_timezone_set('Asia/Manila');
+                            
+                            // Get current day name
+                            $current_day_full = date('l');
+                            $first_letter = strtoupper(substr($current_day_full, 0, 1));
+                            
+                            echo $first_letter; 
+                        ?>
                     </div>
                 </div>
+            </div>
+
+            <!-- Dashboard Statistics Section -->
+            <div class="content-section <?php echo $current_page === 'dashboard' ? 'active' : ''; ?>">
+                <?php include('admin_statistics.php'); ?>
             </div>
 
             <!-- Content Management Section -->
@@ -821,6 +582,11 @@ $current_page = $_GET['page'] ?? 'content';
             <!-- Card Applications Section -->
             <div class="content-section <?php echo $current_page === 'applications' ? 'active' : ''; ?>">
                 <?php include('admin_card_applications.php'); ?>
+            </div>
+
+            <!-- Ads Management Section -->
+            <div class="content-section <?php echo $current_page === 'ads' ? 'active' : ''; ?>">
+                <?php include('admin_ads_management.php'); ?>
             </div>
         </div>
     </div>
@@ -834,9 +600,13 @@ $current_page = $_GET['page'] ?? 'content';
                 minute: '2-digit',
                 hour12: true 
             };
-            const timeElement = document.getElementById('currentTime');
-            if (timeElement) {
-                timeElement.textContent = now.toLocaleTimeString('en-US', options);
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', options);
+
+            // Dynamic Avatar Update: Ensures the letter changes at midnight without refresh
+            const dayNames = ["S", "M", "T", "W", "T", "F", "S"];
+            const avatarElement = document.getElementById('dayAvatar');
+            if (avatarElement) {
+                avatarElement.textContent = dayNames[now.getDay()];
             }
         }
         
@@ -845,13 +615,7 @@ $current_page = $_GET['page'] ?? 'content';
 
         // Mobile menu toggle
         function toggleMobileMenu() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-            
-            // Prevent body scroll when menu is open on mobile
-            if (window.innerWidth <= 768) {
-                document.body.style.overflow = sidebar.classList.contains('mobile-open') ? 'hidden' : '';
-            }
+            document.getElementById('sidebar').classList.toggle('mobile-open');
         }
 
         // Close mobile menu when clicking outside
@@ -864,32 +628,7 @@ $current_page = $_GET['page'] ?? 'content';
                 !toggle.contains(event.target) &&
                 sidebar.classList.contains('mobile-open')) {
                 sidebar.classList.remove('mobile-open');
-                document.body.style.overflow = '';
             }
-        });
-
-        // Close mobile menu when clicking on a menu item
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.addEventListener('click', function() {
-                if (window.innerWidth <= 768) {
-                    const sidebar = document.getElementById('sidebar');
-                    sidebar.classList.remove('mobile-open');
-                    document.body.style.overflow = '';
-                }
-            });
-        });
-
-        // Handle window resize
-        let resizeTimer;
-        window.addEventListener('resize', function() {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(function() {
-                const sidebar = document.getElementById('sidebar');
-                if (window.innerWidth > 768) {
-                    sidebar.classList.remove('mobile-open');
-                    document.body.style.overflow = '';
-                }
-            }, 250);
         });
 
         // Smooth page transitions
@@ -897,10 +636,7 @@ $current_page = $_GET['page'] ?? 'content';
             item.addEventListener('click', function(e) {
                 if (this.href) {
                     e.preventDefault();
-                    const loadingOverlay = document.getElementById('loadingOverlay');
-                    if (loadingOverlay) {
-                        loadingOverlay.style.display = 'flex';
-                    }
+                    document.getElementById('loadingOverlay').style.display = 'flex';
                     setTimeout(() => {
                         window.location.href = this.href;
                     }, 300);
@@ -918,28 +654,6 @@ $current_page = $_GET['page'] ?? 'content';
                 setTimeout(() => msg.remove(), 500);
             });
         }, 5000);
-
-        // Add touch support for better mobile experience
-        if ('ontouchstart' in window) {
-            document.querySelectorAll('.menu-item, .logout-btn').forEach(element => {
-                element.addEventListener('touchstart', function() {
-                    this.style.transform = 'scale(0.98)';
-                });
-                element.addEventListener('touchend', function() {
-                    this.style.transform = '';
-                });
-            });
-        }
-
-        // Prevent zoom on double tap for iOS
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function(event) {
-            const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                event.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, false);
     </script>
 </body>
 </html>
