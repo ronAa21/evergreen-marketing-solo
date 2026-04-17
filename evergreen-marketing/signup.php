@@ -1502,6 +1502,9 @@ $stmt->execute();
 
         // Load provinces on page load
         loadProvinces();
+        
+        // Initialize terms modal
+        termsVisible();
       });
 
       // ========================================

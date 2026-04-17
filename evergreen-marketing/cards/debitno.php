@@ -1000,10 +1000,10 @@
         <div class="footer-bottom">
             <p>© 2023 Evergreen Bank. All rights reserved.<br>Member FDIC. Equal Housing Lender. Evergreen Bank, N.A.</p>
             <div class="footer-links">
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms and Agreements</a>
-                <a href="#">FAQS</a>
-                <a href="#">About Us</a>
+                <a href="../policy.php">Privacy Policy</a>
+                <a href="../terms.php">Terms and Agreements</a>
+                <a href="../faq.php">FAQS</a>
+                <a href="../about.php">About Us</a>
             </div>
         </div>
     </footer>

@@ -1489,6 +1489,7 @@
 
             <!-- Replaced: loans -->
             <a href="../Content-view/ads-view.php">What's new</a>
+            <a href="#">Loan</a>
             <a href="../about.php">About Us</a>
         </div>
 

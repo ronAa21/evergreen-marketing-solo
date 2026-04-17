@@ -205,54 +205,54 @@
         }
 
         /* DROPDOWN STYLES - UPDATED FOR FULL WIDTH */
-.dropdown {
-    position: relative;
-}   
+        .dropdown {
+            position: relative;
+        }   
 
-.dropbtn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1rem;
-    cursor: pointer;
-    padding: 0.5rem 1rem;
-    transition: color 0.3s;
-}
+        .dropbtn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            transition: color 0.3s;
+        }
 
-.dropbtn:hover {
-    color: #F1B24A;
-}
+        .dropbtn:hover {
+            color: #F1B24A;
+        }
 
-/* Dropdown menu box - UPDATED FOR FULL WIDTH */
-.dropdown-content {
-    display: none;
-    position: fixed;
-    left: 0;
-    top: 80px;
-    width: 100vw;
-    background-color: #D9D9D9;
-    padding: 1.5rem 5%;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-    z-index: 99;
-    text-align: center;
-}
+        /* Dropdown menu box - UPDATED FOR FULL WIDTH */
+        .dropdown-content {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 80px;
+            width: 100vw;
+            background-color: #D9D9D9;
+            padding: 1.5rem 5%;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            z-index: 99;
+            text-align: center;
+        }
 
-/* Links inside dropdown */
-.dropdown-content a {
-    color: #003631;
-    margin: 0 2rem;
-    font-size: 1rem;
-    text-decoration: none;
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    transition: all 0.3s ease;
-    font-weight: 500;
-}
+        /* Links inside dropdown */
+        .dropdown-content a {
+            color: #003631;
+            margin: 0 2rem;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
 
-.dropdown-content a:hover {
-    color: #F1B24A;
-    transform: translateY(-2px);
-}
+        .dropdown-content a:hover {
+            color: #F1B24A;
+            transform: translateY(-2px);
+        }
 
         /* Hero Section */
         .hero {
@@ -604,6 +604,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            text-decoration: none;
         }
 
         .btn-yellow {
@@ -1170,10 +1171,10 @@
         <div class="footer-bottom">
             <p>© 2023 Evergreen Bank. All rights reserved.<br>Member FDIC. Equal Housing Lender. Evergreen Bank, N.A.</p>
             <div class="footer-links">
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms and Agreements</a>
-                <a href="#">FAQS</a>
-                <a href="#">About Us</a>
+                <a href="../policy.php">Privacy Policy</a>
+                <a href="../terms.php">Terms and Agreements</a>
+                <a href="../faq.php">FAQS</a>
+                <a href="../about.php">About Us</a>
             </div>
         </div>
     </footer>

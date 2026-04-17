@@ -5,6 +5,15 @@ if (!isset($_SESSION['admin_id'])) {
 
 include("db_connect.php");
 
+// Check if we're viewing detailed records
+$view = $_GET['view'] ?? '';
+
+// If viewing detailed records, show that instead
+if ($view) {
+    include('admin_detailed_view.php');
+    return;
+}
+
 // Fetch statistics
 $stats = [];
 
@@ -99,6 +108,10 @@ $conn->close();
         transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
+        cursor: pointer;
+        text-decoration: none;
+        display: block;
+        color: inherit;
     }
 
     .stat-card::before {
@@ -377,7 +390,7 @@ $conn->close();
 
 <!-- Statistics Cards -->
 <div class="stats-grid">
-    <div class="stat-card">
+    <a href="?page=dashboard&view=total_users" class="stat-card">
         <div class="stat-icon users">
             <i class="fas fa-users"></i>
         </div>
@@ -387,9 +400,9 @@ $conn->close();
             <i class="fas fa-arrow-up"></i>
             <span>All registered customers</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=new_users" class="stat-card">
         <div class="stat-icon new-users">
             <i class="fas fa-user-plus"></i>
         </div>
@@ -399,9 +412,9 @@ $conn->close();
             <i class="fas fa-calendar"></i>
             <span><?php echo date('F Y'); ?></span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=total_applications" class="stat-card">
         <div class="stat-icon applications">
             <i class="fas fa-file-alt"></i>
         </div>
@@ -411,9 +424,9 @@ $conn->close();
             <i class="fas fa-chart-line"></i>
             <span>All card applications</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=pending_applications" class="stat-card">
         <div class="stat-icon pending">
             <i class="fas fa-clock"></i>
         </div>
@@ -423,9 +436,9 @@ $conn->close();
             <i class="fas fa-hourglass-half"></i>
             <span>Awaiting review</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=approved_applications" class="stat-card">
         <div class="stat-icon approved">
             <i class="fas fa-check-circle"></i>
         </div>
@@ -435,9 +448,9 @@ $conn->close();
             <i class="fas fa-thumbs-up"></i>
             <span>Successfully approved</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=declined_applications" class="stat-card">
         <div class="stat-icon declined">
             <i class="fas fa-times-circle"></i>
         </div>
@@ -447,9 +460,9 @@ $conn->close();
             <i class="fas fa-thumbs-down"></i>
             <span>Not approved</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=total_referrals" class="stat-card">
         <div class="stat-icon referrals">
             <i class="fas fa-share-alt"></i>
         </div>
@@ -459,9 +472,9 @@ $conn->close();
             <i class="fas fa-users"></i>
             <span>Successful referrals</span>
         </div>
-    </div>
+    </a>
 
-    <div class="stat-card">
+    <a href="?page=dashboard&view=total_points" class="stat-card">
         <div class="stat-icon points">
             <i class="fas fa-star"></i>
         </div>
@@ -471,7 +484,7 @@ $conn->close();
             <i class="fas fa-gift"></i>
             <span>Points distributed</span>
         </div>
-    </div>
+    </a>
 </div>
 
 <!-- Card Type Breakdown Chart -->

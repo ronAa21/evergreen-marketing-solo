@@ -405,7 +405,7 @@
 </head>
 <body>
   <nav>
-    <a href="viewingpage">
+    <a href="viewingpage.php">
           <img src="images/icon.png" alt="logo" class="logo">
     </a>
     <div class="nav-wrap">
