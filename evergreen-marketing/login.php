@@ -1,5 +1,7 @@
 <?php
 session_start();
+require_once 'includes/content_helper.php';
+
 include("db_connect.php");
 
 $error = "";
@@ -591,9 +593,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
   <div class="left">
     <div class="logo">
-      <img src="images/loginlogo.png" alt="Logo">
+      <img src="<?php echo get_company_logo(); ?>" alt="Logo">
       <div class="logo-text">
-        <span class="name">EVERGREEN</span>
+        <span class="name"><?php echo get_company_name(); ?></span>
         <span class="tagline">Secure. Invest. Achieve</span>
       </div>
     </div>
@@ -640,7 +642,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     <div class="right-content">
       <p class="welcome-text">Welcome to</p>
-      <h1>EVERGREEN</h1>
+      <h1><?php echo get_company_name(); ?></h1>
       <p class="subtitle">Log in to access your account!</p>
       <img src="images/laptop.png" alt="Laptop" class="laptop-img">
     </div>

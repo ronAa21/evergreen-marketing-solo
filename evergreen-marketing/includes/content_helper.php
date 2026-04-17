@@ -32,7 +32,7 @@ function get_company_name() {
 }
 
 function get_company_logo() {
-    return get_site_content('company_logo', 'images/Logo.png.png');
+    return get_site_content('company_logo', 'images/Logo.png');
 }
 
 function get_contact_phone() {

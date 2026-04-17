@@ -992,7 +992,7 @@
         </div>
         
         <div class="footer-bottom">
-            <p>© 2023 Evergreen Bank. All rights reserved.<br>Member FDIC. Equal Housing Lender. Evergreen Bank, N.A.</p>
+            <p>© 2023 <?php echo get_company_name(); ?>. All rights reserved.<br>Member FDIC. Equal Housing Lender. <?php echo get_company_name(); ?>, N.A.</p>
             <div class="footer-links">
                 <a href="policy.php">Privacy Policy</a>
                 <a href="terms.php">Terms and Agreements</a>
@@ -1291,7 +1291,7 @@
             }
         });
 
-        // Custom styled confirmation modal that matches Evergreen Bank design
+        // Custom styled confirmation modal that matches <?php echo get_company_name(); ?> design
 function showSignOutModal(event) {
     event.preventDefault();
     

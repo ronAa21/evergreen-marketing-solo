@@ -513,7 +513,7 @@
           <p>You can request access, correction, or deletion of your personal data. You may also opt out of promotional communications at any time.</p>
 
           <h3>6. Contact Us</h3>
-          <p>If you have questions about this Privacy Policy, please contact us at <a href="#" id="gmail-link">evrgrn.64@gmail.com</a></p>
+          <p>If you have questions about this Privacy Policy, please contact us at <a href="#" id="gmail-link"><?php echo get_contact_email(); ?></a></p>
         </div>
       </div>
 

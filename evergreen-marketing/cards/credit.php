@@ -911,7 +911,7 @@
         <div class="logo">
             <div class="logo-icon">
                 <a href="viewingpage.php">
-                    <img src="../images/Logo.png.png">
+                    <img src="../<?php echo get_company_logo(); ?>">
                 </a>
             </div>
             <span>

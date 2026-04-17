@@ -1,5 +1,7 @@
 <?php
 session_start();
+require_once 'includes/content_helper.php';
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -150,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->isSMTP();
                 $mail->Host = 'smtp.gmail.com';
                 $mail->SMTPAuth = true;
-                $mail->Username = 'evrgrn.64@gmail.com';
+                $mail->Username = '<?php echo get_contact_email(); ?>';
                 $mail->Password = 'dourhhbymvjejuct';
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port = 587;
@@ -165,7 +167,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->Timeout = 30;
                 
                 // Recipients
-                $mail->setFrom('evrgrn.64@gmail.com', 'Evergreen Banking');
+                $mail->setFrom('<?php echo get_contact_email(); ?>', '<?php echo get_company_name(); ?>ing');
                 $mail->addAddress($email, $first_name . ' ' . $last_name);
                 
                 // Content
@@ -174,7 +176,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->Body = "
                     <html>
                     <body style='font-family: Arial, sans-serif; padding: 20px;'>
-                        <h2 style='color: #0d3d38;'>Welcome to Evergreen Banking!</h2>
+                        <h2 style='color: #0d3d38;'>Welcome to <?php echo get_company_name(); ?>ing!</h2>
                         <p>Thank you for creating an account. Here are your important details:</p>
                         
                         <div style='background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;'>
@@ -1003,9 +1005,9 @@ $stmt->execute();
 <body>
   <div class="left">
     <div class="logo">
-      <img src="images/loginlogo.png" alt="Logo">
+      <img src="<?php echo get_company_logo(); ?>" alt="Logo">
       <div class="logo-text">
-        <span class="name">EVERGREEN</span>
+        <span class="name"><?php echo get_company_name(); ?></span>
         <span class="tagline">Secure. Invest. Achieve</span>
       </div>
     </div>
@@ -1175,7 +1177,7 @@ $stmt->execute();
     
     <div class="right-content">
       <p class="welcome-text">Welcome to</p>
-      <h1>EVERGREEN</h1>
+      <h1><?php echo get_company_name(); ?></h1>
       <p class="subtitle">Sign up to create an account!</p>
       <img src="images/laptop.png" alt="Laptop" class="laptop-img">
     </div>
@@ -1186,9 +1188,9 @@ $stmt->execute();
    none;">
     <div class="popup">
         <div class="head-logo">
-            <img src="images/Logo.png.png" alt="logo" class="logo-popup">
+            <img src="<?php echo get_company_logo(); ?>" alt="logo" class="logo-popup">
             <div class="head-wrap">
-              <h4 id="web-title">EVERGREEN</h4>
+              <h4 id="web-title"><?php echo get_company_name(); ?></h4>
               <p id="web-catch">Secure Invest Achieve</p>  
             </div>
         </div>

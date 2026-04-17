@@ -1,5 +1,7 @@
 <?php
-    session_start([
+    
+require_once 'includes/content_helper.php';
+session_start([
        'cookie_httponly' => true,
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
@@ -12,7 +14,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evergreen Bank - Where Your Future Stays Green</title>
+    <title><?php echo get_company_name(); ?> - Where Your Future Stays Green</title>
 
     <style>
         * {
@@ -582,7 +584,7 @@
         <div class="logo">
             <div class="logo-icon">
                 <a href="viewing.php">
-                    <img src="images/Logo.png.png">
+                    <img src="<?php echo get_company_logo(); ?>">
                 </a>
             </div>
                 <span>
@@ -694,13 +696,13 @@
             <div class="footer-section">
                 <h4>Contact Us</h4>
                 <div class="contact-item">📞 1-800-EVERGREEN</div>
-                <div class="contact-item">✉️ evrgrn.64@gmail.com</div>
+                <div class="contact-item">✉️ <?php echo get_contact_email(); ?></div>
                 <div class="contact-item">📍 123 Financial District, Suite 500<br>&nbsp;&nbsp;&nbsp;&nbsp;New York, NY 10004</div>
             </div>
         </div>
         
         <div class="footer-bottom">
-            <p>© 2023 Evergreen Bank. All rights reserved.<br>Member FDIC. Equal Housing Lender. Evergreen Bank, N.A.</p>
+            <p>© 2023 <?php echo get_company_name(); ?>. All rights reserved.<br>Member FDIC. Equal Housing Lender. <?php echo get_company_name(); ?>, N.A.</p>
             <div class="footer-links">
                 <a href="#">Privacy Policy</a>
                 <a href="#">Terms and Agreements</a>

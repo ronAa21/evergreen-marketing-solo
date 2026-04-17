@@ -23,7 +23,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evergreen Bank - Banking that grows with you</title>
+    <title><?php echo get_company_name(); ?> - <?php echo get_hero_title(); ?></title>
     <style>
         * {
             margin: 0;
@@ -1775,7 +1775,7 @@
             }
         });
 
-        // Custom styled confirmation modal that matches Evergreen Bank design
+        // Custom styled confirmation modal that matches <?php echo get_company_name(); ?> design
 function showSignOutModal(event) {
     event.preventDefault();
     

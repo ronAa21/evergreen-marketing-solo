@@ -199,7 +199,7 @@ $conn->close();
 <body>
     <div class="login-container">
         <div class="logo-section">
-            <img src="images/Logo.png.png" alt="Evergreen Bank">
+            <img src="images/Logo.png" alt="Evergreen Bank">
             <h1>Admin Login</h1>
             <p>Evergreen Bank Administration</p>
         </div>

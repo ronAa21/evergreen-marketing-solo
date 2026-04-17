@@ -1,5 +1,7 @@
 <?php
-    session_start([
+    
+require_once 'includes/content_helper.php';
+session_start([
        'cookie_httponly' => true,
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
@@ -401,7 +403,7 @@
     </a>
     <div class="nav-wrap">
       <h2 class="web-title">
-        <a href="viewing.php">EVERGREEN</a></h2>
+        <a href="viewing.php"><?php echo get_company_name(); ?></a></h2>
       <p class="motto">
         <a href="viewing.php">Secure, Invest, Achieve</a></p>
     </div>

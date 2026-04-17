@@ -1,5 +1,7 @@
 <?php
-    session_start([
+    
+require_once 'includes/content_helper.php';
+session_start([
        'cookie_httponly' => true,
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
@@ -472,7 +474,7 @@
     </a>
     <div>
       <div class="brand">
-        <a href="viewing.php">EVERGREEN</a>
+        <a href="viewing.php"><?php echo get_company_name(); ?></a>
       </div>
       <div class="motto">
         <a href="viewing.php">Secure. Invest. Achieve</a></div>
@@ -510,7 +512,7 @@
           <p>You can request access, correction, or deletion of your personal data. You may also opt out of promotional communications at any time.</p>
 
           <h3>6. Contact Us</h3>
-          <p>If you have questions about this Privacy Policy, please contact us at <a href="#" id="gmail-link">evrgrn.64@gmail.com</a></p>
+          <p>If you have questions about this Privacy Policy, please contact us at <a href="#" id="gmail-link"><?php echo get_contact_email(); ?></a></p>
         </div>
       </div>
 

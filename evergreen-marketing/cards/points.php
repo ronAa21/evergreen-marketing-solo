@@ -1,5 +1,7 @@
 <?php
-    session_start([
+    
+require_once '../includes/content_helper.php';
+session_start([
        'cookie_httponly' => true,
        'cookie_secure' => isset($_SERVER['HTTPS']),
        'use_strict_mode' => true
@@ -1466,11 +1468,11 @@
         <div class="logo">
             <div class="logo-icon">
                 <a href="viewingpage.php">
-                    <img src="../images/Logo.png.png">
+                    <img src="../<?php echo get_company_logo(); ?>">
                 </a>
             </div>
             <span>
-                <a href="../viewingpage.php">EVERGREEN</a>
+                <a href="../viewingpage.php"><?php echo get_company_name(); ?></a>
             </span>
         </div>
 
@@ -1620,7 +1622,7 @@
             <div class="footer-section">
                 <h4>Contact Us</h4>
                 <div class="contact-item">📞 09123456789</div>
-                <div class="contact-item">✉️ evrgrn.64@gmail.com</div>
+                <div class="contact-item">✉️ <?php echo get_contact_email(); ?></div>
                 <div class="contact-item">📍 673 Quirino Highway, San Bartolome, Novaliches, Quezon City, 1116 Philippines.</div>
             </div>
         </div>

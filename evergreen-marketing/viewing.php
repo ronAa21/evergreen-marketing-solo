@@ -14,7 +14,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evergreen Bank - Banking that grows with you</title>
+    <title><?php echo get_company_name(); ?> - <?php echo get_hero_title(); ?></title>
     <style>
         * {
             margin: 0;
@@ -1587,9 +1587,9 @@
             <span class="exit-btn">&#10005;</span>
             </div>
             <div class="head-logo">
-                <img src="images/Logo.png.png" alt="logo" class="logo-popup">
+                <img src="<?php echo get_company_logo(); ?>" alt="logo" class="logo-popup">
                 <div class="head-wrap">
-                  <h4 id="web-title">EVERGREEN</h4>
+                  <h4 id="web-title"><?php echo get_company_name(); ?></h4>
                   <p id="web-catch">Secure Invest Achieve</p>  
                 </div>
             </div>

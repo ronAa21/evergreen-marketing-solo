@@ -62,7 +62,7 @@ echo "<div class='info'>
     &lt;span&gt;EVERGREEN&lt;/span&gt; → &lt;span&gt;&lt;?php echo get_company_name(); ?&gt;&lt;/span&gt;<br><br>
     
     // Company logo<br>
-    &lt;img src=\"images/Logo.png.png\"&gt; → &lt;img src=\"&lt;?php echo get_company_logo(); ?&gt;\"&gt;<br><br>
+    &lt;img src=\"images/Logo.png\"&gt; → &lt;img src=\"&lt;?php echo get_company_logo(); ?&gt;\"&gt;<br><br>
     
     // Hero title<br>
     &lt;h1&gt;Secure. Invest. Achieve.&lt;/h1&gt; → &lt;h1&gt;&lt;?php echo get_hero_title(); ?&gt;&lt;/h1&gt;<br><br>
@@ -111,7 +111,7 @@ echo "<h2>Example: Update Navigation</h2>";
 echo "<div class='code'>
 <strong>Before:</strong><br>
 &lt;div class=\"logo\"&gt;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&lt;img src=\"images/Logo.png.png\"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;img src=\"images/Logo.png\"&gt;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&lt;span&gt;EVERGREEN&lt;/span&gt;<br>
 &lt;/div&gt;<br><br>
 
